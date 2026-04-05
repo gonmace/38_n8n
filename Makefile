@@ -7,7 +7,7 @@ dev-up:
 	@[ -f .env ] || { echo "Error: .env no encontrado. Ejecuta 'make setup' primero."; exit 1; }
 	@set -a && . ./.env && set +a; \
 	PROFILES="--profile postgres"; \
-	[ -n "$${N8N_DOMAIN}" ] && PROFILES="$$PROFILES --profile n8n"; \
+	[ -n "$${N8N_DOMAIN}" ] && { PROFILES="$$PROFILES --profile n8n"; mkdir -p volumes/n8n; }; \
 	[ "$${N8N_MCP_ENABLED}" = "true" ] && [ -n "$${N8N_DOMAIN}" ] && PROFILES="$$PROFILES --profile n8n-mcp"; \
 	docker compose -f docker-compose.dev.yml $$PROFILES up -d
 
