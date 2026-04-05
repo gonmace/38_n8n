@@ -49,6 +49,8 @@ n8n-update:
 install:
 	pip install -r requirements-dev.txt
 	python manage.py tailwind install
+	@echo ""
+	@[ -f .env ] || echo "  Siguiente paso: ejecuta 'make setup' para generar el .env"
 
 # Hot reload completo: Tailwind en background + runserver vigilando la carpeta CSS.
 # Cuando Tailwind recompila static/css/dist/, Django detecta el cambio y

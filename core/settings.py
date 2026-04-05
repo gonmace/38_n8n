@@ -4,9 +4,13 @@ from decouple import config, Csv
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.dirname(PROJECT_DIR)
 
-SECRET_KEY = config('SECRET_KEY')
+_SECRET_KEY_DEFAULT = 'django-insecure-default-only-for-dev-run-make-setup'
+SECRET_KEY = config('SECRET_KEY', default=_SECRET_KEY_DEFAULT)
 
 DEBUG = config('DEBUG', default=False, cast=bool)
+
+if not DEBUG and SECRET_KEY == _SECRET_KEY_DEFAULT:
+    raise ValueError("SECRET_KEY no está configurado. Ejecuta 'make setup' antes de desplegar.")
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='', cast=Csv())
 
