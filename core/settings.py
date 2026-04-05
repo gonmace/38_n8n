@@ -9,8 +9,10 @@ SECRET_KEY = config('SECRET_KEY', default=_SECRET_KEY_DEFAULT)
 
 DEBUG = config('DEBUG', default=False, cast=bool)
 
-if not DEBUG and SECRET_KEY == _SECRET_KEY_DEFAULT:
-    raise ValueError("SECRET_KEY no está configurado. Ejecuta 'make setup' antes de desplegar.")
+# Validar solo cuando existe .env (entorno configurado) pero SECRET_KEY no fue definido.
+# Sin .env = instalación inicial, el default es aceptable.
+if SECRET_KEY == _SECRET_KEY_DEFAULT and os.path.exists(os.path.join(BASE_DIR, '.env')):
+    raise ValueError("SECRET_KEY no está en .env. Ejecuta 'make setup' para generarlo.")
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='', cast=Csv())
 
