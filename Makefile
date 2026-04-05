@@ -3,13 +3,16 @@ setup:
 	bash setup.sh
 
 # ── Docker de desarrollo (Redis + PostgreSQL + n8n opcionales) ─────────────────
+CURRENT_UID := $(shell id -u)
+CURRENT_GID := $(shell id -g)
+
 dev-up:
 	@[ -f .env ] || { echo "Error: .env no encontrado. Ejecuta 'make setup' primero."; exit 1; }
 	@set -a && . ./.env && set +a; \
 	PROFILES="--profile postgres"; \
 	[ -n "$${N8N_DOMAIN}" ] && { PROFILES="$$PROFILES --profile n8n"; mkdir -p volumes/n8n; }; \
 	[ "$${N8N_MCP_ENABLED}" = "true" ] && [ -n "$${N8N_DOMAIN}" ] && PROFILES="$$PROFILES --profile n8n-mcp"; \
-	docker compose -f docker-compose.dev.yml $$PROFILES up -d
+	UID=$(CURRENT_UID) GID=$(CURRENT_GID) docker compose -f docker-compose.dev.yml $$PROFILES up -d
 
 dev-down:
 	docker compose -f docker-compose.dev.yml down
