@@ -164,7 +164,7 @@ ALLOWED_HOSTS="${DOMAIN}"
 CSRF_TRUSTED_ORIGINS="https://${DOMAIN}"
 
 # ── Escribir .env (via Python para escapar correctamente caracteres especiales) ──
-python3 - << PYEOF
+python3 - << 'PYEOF'
 import os
 
 def kv(key, value):
