@@ -1,100 +1,54 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+## Comandos clave
 
-## Commands
-
-### Configuración inicial
 ```bash
-make setup        # wizard interactivo que genera .env
+# Setup y dev
+make setup          # genera .env interactivo (primera vez)
+make install        # pip install requirements-dev + tailwind install
+make dev-up         # levanta Redis + PostgreSQL + n8n/MCP según .env
+make dev            # migrate + tailwind watch + runserver (hot reload completo)
+make dev-check      # verifica estado del entorno
+
+# Django
+make migrate / migrations / superuser / shell / collect
+
+# Producción
+make nginx          # configura nginx (SOLO la primera vez — certbot modifica este archivo)
+make deploy         # git pull + verifica puertos + rebuild
+make n8n-update     # actualiza n8n (rebuild imagen + restart, preserva volumen)
+make n8n-export     # exporta workflows dev a n8n/workflows/
 ```
 
-### Desarrollo local
-```bash
-make install      # pip install -r requirements-dev.txt + tailwind install
-make dev-up       # levanta Redis + PostgreSQL + n8n/MCP según .env (docker-compose.dev.yml)
-make dev          # migrate + tailwind start (background) + runserver
-make dev-down     # detiene los contenedores de desarrollo
-make dev-logs     # logs de los contenedores de desarrollo
-```
+On Windows: `NPM_BIN_PATH = r'C:\Program Files\nodejs\npm.cmd'` en `settings.py` dentro del bloque `if DEBUG:`.
 
-En desarrollo, Tailwind y Django se ejecutan en terminales separadas:
-```bash
-# Terminal 1
-python manage.py tailwind start
+## Arquitectura
 
-# Terminal 2
-python manage.py runserver
-```
+`core/settings.py` único — comportamiento por variables de entorno:
+- Sin `POSTGRES_DB` → SQLite | con `POSTGRES_DB` → PostgreSQL
+- `POSTGRES_MODE=host` → contenedores usan `host.docker.internal`
+- Sin `EMAIL_HOST` → consola | con `EMAIL_HOST` → SMTP
+- `DEBUG=True` → axes DB handler, browser-reload, tailwind activo
+- `DEBUG=False` → axes cache handler, HSTS, CSP estricto
 
-### Django
-```bash
-make migrate      # python manage.py migrate
-make migrations   # python manage.py makemigrations
-make superuser    # python manage.py createsuperuser
-make collect      # collectstatic
-make shell        # python manage.py shell
-```
+**Docker Compose profiles** (gestionados automáticamente por `deploy.sh`):
+| Profile | Servicio | Condición |
+|---------|----------|-----------|
+| `postgres` | PostgreSQL | `POSTGRES_MODE=container` |
+| `n8n` | n8n | `N8N_DOMAIN` definido |
+| `n8n-mcp` | n8n-MCP | `N8N_MCP_ENABLED=true` + n8n activo |
+| — | Redis + Django | Siempre activos |
 
-### n8n
-```bash
-make n8n-export   # exporta workflows de n8n dev a n8n/workflows/ (para commitear)
-```
+**Puertos:** `APP_PORT` (8000), `N8N_PORT` (8001), `N8N_MCP_PORT` (8002). Todos bindean a `127.0.0.1` en producción. Redis no expone puerto al exterior.
 
-### Producción
-```bash
-make check-ports  # verifica disponibilidad de puertos antes de desplegar
-make nginx        # configura nginx (SOLO la primera vez — no sobreescribir tras certbot)
-make deploy       # git pull + verifica puertos + rebuild contenedores
-make logs         # docker compose logs -f django
-make down         # docker compose down
-```
+**Static files:** Whitenoise `CompressedManifestStaticFilesStorage` → hashes en filenames + `.gz` pre-comprimidos. nginx sirve `/static/` con `gzip_static on`. Cache `immutable` 365d es seguro por los hashes.
 
-On Windows, `NPM_BIN_PATH = r'C:\Program Files\nodejs\npm.cmd'` is set in settings.py inside the `if DEBUG:` block.
+**Hot reload dev:** `make dev` corre `tailwind start &` + `runserver --watch-dir static/css/dist`. Cambios CSS → Tailwind recompila → Django detecta → browser-reload recarga.
 
-## Architecture
+**Tailwind/DaisyUI:** v4.2 / v5.5. Deps en `devDependencies` de `package.json`. En producción el Dockerfile compila CSS en stage Node y copia solo el CSS al stage Python (sin node_modules en prod).
 
-Single `core/settings.py` — no separate dev/prod files. Behavior adapts via environment variables:
-- `DEBUG=True` → SQLite, console email, Tailwind + browser-reload enabled
-- `POSTGRES_DB` defined → PostgreSQL
-- `POSTGRES_MODE=host` → PostgreSQL en el servidor host (contenedores usan `host.docker.internal`)
-- `EMAIL_HOST` defined → SMTP backend
-- `DEBUG=False` → HSTS, secure CSRF, no dev tools
+**n8n:** subdominio propio, imagen custom con Python 3.12, comparte PostgreSQL (DB `n8n`). `N8N_ENCRYPTION_KEY` no cambiar nunca. Actualizar con `make n8n-update`.
 
-**Puertos consecutivos:** Django usa `APP_PORT` (default 8000), n8n `APP_PORT+1` (8001), n8n-MCP `APP_PORT+2` (8002). En producción todos los puertos bindean a `127.0.0.1` — solo accesibles via nginx.
+**nginx:** `make nginx` solo una vez — certbot lo modifica para SSL y `deploy.sh` nunca lo toca.
 
-**Tailwind setup** (`django-tailwind` + Tailwind CSS v4 + DaisyUI v5):
-- Source CSS: `theme/static_src/src/styles.css`
-- Output CSS: `theme/static/css/dist/styles.css`
-- `{% load tailwind_tags %}` + `{% tailwind_css %}` in `templates/base.html`
-- When adding new Django apps, add `@source "../../../<app_name>"` to `styles.css`
-
-**Static files:** `CompressedManifestStaticFilesStorage` (Whitenoise) genera hashes en filenames y archivos `.gz`. nginx sirve `/static/` directamente con `gzip_static on` para usar los `.gz` pre-generados. Cache `immutable` es seguro porque los filenames cambian con cada deploy.
-
-**Redis:** Siempre activo (contenedor). Cache compartido entre workers Gunicorn, sesiones via cache (no DB), django-axes usa cache en vez de DB.
-
-**Security:** django-axes (brute-force lockout, 5 intentos, 1h cooldown, backend cache), django-csp (CSP headers), HSTS en producción.
-
-**Admin URL** is randomized via `ADMIN_URL` env var. Exposed in `robots.txt` via template context.
-
-**Docker Compose profiles:**
-- `postgres` — PostgreSQL contenedor (solo cuando `POSTGRES_MODE=container`, default)
-- `n8n` — n8n automation (cuando `N8N_DOMAIN` está definido)
-- `n8n-mcp` — n8n MCP server (cuando `N8N_MCP_ENABLED=true` y n8n habilitado)
-- Redis y Django siempre se ejecutan (sin profile)
-
-**n8n (opcional):**
-- Subdominio propio (`N8N_DOMAIN`), imagen custom con Python 3.12 (`docker/n8n.Dockerfile`)
-- Comparte PostgreSQL con DB separada (`n8n`), creada por `docker/init-db.sql`
-- Workflows exportados con `make n8n-export` → `n8n/workflows/`, importados automáticamente en prod
-- `N8N_ENCRYPTION_KEY` debe mantenerse constante — cambiarla invalida credenciales
-
-**n8n-MCP (opcional):**
-- `ghcr.io/czlonkowski/n8n-mcp:latest` en modo HTTP
-- Requiere n8n funcionando y saludable
-- Accesible via nginx en `https://N8N_DOMAIN/mcp`
-- Requiere `N8N_API_KEY` (generar en n8n Settings > API) y `N8N_MCP_AUTH_TOKEN`
-
-**nginx:** Solo se configura una vez con `make nginx`. NO ejecutar en cada deploy — certbot modifica el archivo para SSL y sobreescribirlo eliminaria los certificados.
-
-**Production:** Docker Compose + Gunicorn (`entrypoint.sh`) + Nginx en host. `deploy.sh` hace git pull + verifica puertos + construye profiles dinámicamente según `.env` + rebuild contenedores.
+**Al agregar apps Django:** añadir a `INSTALLED_APPS` + `@source "../../../<app>"` en `theme/static_src/src/styles.css`.
