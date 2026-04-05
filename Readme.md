@@ -1,259 +1,340 @@
 # Django Skeleton
 
-Esqueleto base para proyectos Django con Tailwind v4 + DaisyUI v5, listo para desarrollo local y despliegue en producción con Docker + PostgreSQL. n8n es opcional.
+Skeleton para desplegar Django en un VPS con nginx como reverse proxy. Incluye soporte opcional para n8n (automatización) y n8n-MCP (integración con Claude Code / clientes MCP).
 
 ## Stack
 
-- **Backend:** Django 5.1+, Gunicorn
-- **Base de datos:** SQLite (dev local) / PostgreSQL 17 (dev Docker y prod)
-- **Estilos:** Tailwind CSS v4 + DaisyUI v5
-- **Archivos estáticos:** Whitenoise
-- **Automatización:** n8n (opcional, subdominio propio en producción)
-- **Seguridad:** django-axes, django-csp, headers HTTP
-- **Producción:** Docker Compose + Nginx (gzip)
+| Componente | Tecnología |
+|---|---|
+| Framework | Django 5.2+ |
+| Servidor WSGI | Gunicorn (3 workers) |
+| Base de datos | PostgreSQL 17 (contenedor o host) |
+| Cache / Sesiones | Redis 7 |
+| CSS | Tailwind CSS v4.2 + DaisyUI v5.5 |
+| Archivos estáticos | Whitenoise (`CompressedManifestStaticFilesStorage`) + nginx (`gzip_static`) |
+| Seguridad | django-axes (cache backend), django-csp, HSTS |
+| Automatización (opcional) | n8n |
+| MCP Server (opcional) | n8n-MCP |
+| Reverse proxy | Nginx (host) + Let's Encrypt |
+
+---
+
+## Quick Start (VPS)
+
+```bash
+# 1. Clonar el proyecto
+git clone <repo> miproyecto && cd miproyecto
+
+# 2. Configurar — genera .env de forma interactiva
+make setup
+
+# 3. Configurar nginx (SOLO la primera vez — no volver a ejecutar tras certbot)
+make nginx
+
+# 4. Obtener certificado SSL
+sudo certbot --nginx -d tudominio.com
+# Si n8n está habilitado, agregar también: -d n8n.tudominio.com
+
+# 5. Desplegar
+make deploy
+```
+
+Para deploys posteriores solo se necesita `make deploy` — hace `git pull` + verifica puertos + rebuild automáticamente. **Nunca volver a ejecutar `make nginx`** después de que certbot configuró el SSL.
+
+---
+
+## Desarrollo local
+
+### Opción A — Mínimo (solo SQLite, sin contenedores)
+
+Ideal para trabajar en templates, vistas y lógica de negocio sin necesitar base de datos completa.
+
+```bash
+make install           # instala dependencias Python + Tailwind
+make setup             # genera .env (elige SQLite / sin n8n)
+make dev               # migrate + tailwind watcher + runserver
+```
+
+> En este modo axes usa el backend de base de datos en lugar de Redis — no hay crash si Redis no está disponible.
+
+### Opción B — Completo (PostgreSQL + Redis en Docker)
+
+```bash
+make install           # instala dependencias Python + Tailwind
+make setup             # genera .env con PostgreSQL
+make dev-up            # levanta Redis + PostgreSQL (+ n8n/MCP si están en .env)
+make dev-check         # verifica que todo esté corriendo
+make dev               # migrate + tailwind watcher + runserver
+```
+
+En ambos casos Django corre nativo en el host (no en Docker). Redis en Docker Desktop es accesible en `localhost:6379`.
+
+### Hot reload completo
+
+`make dev` lanza Tailwind en background y Django con `--watch-dir static/css/dist`. El flujo completo:
+
+1. Editas `theme/static_src/src/styles.css`
+2. Tailwind detecta el cambio y recompila `static/css/dist/styles.css` (< 100ms)
+3. Django detecta el cambio en el directorio vigilado y reinicia
+4. `django-browser-reload` notifica al browser y la página recarga automáticamente
+
+Para Python y templates: Django recarga directamente, sin pasar por el paso 2-3.
+
+### Dos terminales (alternativa a `make dev`)
+
+```bash
+# Terminal 1 — watcher CSS con hot reload
+python manage.py tailwind start
+
+# Terminal 2 — servidor Django vigilando CSS
+python manage.py runserver --watch-dir static/css/dist
+```
+
+### Comportamiento automático según `.env`
+
+| Variable | Ausente | Presente |
+|---|---|---|
+| `POSTGRES_DB` | SQLite | PostgreSQL |
+| `N8N_DOMAIN` | n8n deshabilitado | n8n en contenedor |
+| `REDIS_URL` | `localhost:6379` | valor configurado |
+
+---
+
+## PostgreSQL: contenedor vs host
+
+Controla el comportamiento con `POSTGRES_MODE` en `.env`:
+
+### Contenedor Docker (default)
+```env
+POSTGRES_MODE=container
+POSTGRES_HOST=postgres
+```
+PostgreSQL corre en Docker, incluido en `docker-compose.yml` con el profile `postgres`.
+
+### PostgreSQL del servidor host
+```env
+POSTGRES_MODE=host
+POSTGRES_HOST=host.docker.internal
+```
+Los contenedores se conectan al PostgreSQL instalado en el VPS via `host.docker.internal`. El contenedor postgres **no se inicia**.
+
+**Requisitos para modo host:**
+1. `listen_addresses` en `postgresql.conf` debe incluir la IP del bridge Docker (o `*`)
+2. `pg_hba.conf` debe aceptar conexiones desde la red Docker (`172.17.0.0/16`):
+   ```
+   host  all  all  172.17.0.0/16  md5
+   ```
+3. Crear manualmente las bases de datos del proyecto y `n8n`
+
+---
+
+## Servicios opcionales
+
+Los servicios opcionales se activan via Docker Compose profiles. `deploy.sh` los gestiona automáticamente según el `.env`.
+
+### n8n
+
+Habilitar en `.env`:
+```env
+N8N_DOMAIN=n8n.tudominio.com
+N8N_ENCRYPTION_KEY=clave-generada-por-setup
+```
+
+- Subdominio propio con imagen custom (Python 3.12 integrado para Code nodes)
+- Comparte PostgreSQL con base de datos separada (`n8n`)
+- Workflows en `n8n/workflows/` se importan automáticamente al arrancar
+- Exportar workflows del dev: `make n8n-export`
+- **`N8N_ENCRYPTION_KEY` debe mantenerse constante** — cambiarla invalida credenciales guardadas
+
+### n8n-MCP
+
+Requiere n8n habilitado. Habilitar en `.env`:
+```env
+N8N_MCP_ENABLED=true
+N8N_API_KEY=<generar en n8n: Settings > API>
+N8N_MCP_AUTH_TOKEN=token-generado-por-setup
+```
+
+Expone un servidor MCP sobre HTTP en `https://n8n.tudominio.com/mcp`. Permite integrar n8n con Claude Code u otros clientes MCP.
+
+---
+
+## Puertos
+
+Los servicios usan puertos consecutivos desde `APP_PORT`. Para cambiarlos, ajusta solo `APP_PORT` en `.env` (los demás se calculan en `setup.sh`).
+
+| Servicio | Puerto default | Variable |
+|---|---|---|
+| Django | 8000 | `APP_PORT` |
+| n8n | 8001 | `N8N_PORT` |
+| n8n-MCP | 8002 | `N8N_MCP_PORT` |
+| Redis | interno | — |
+| PostgreSQL | 5432 | `POSTGRES_HOST_PORT` (solo dev) |
+
+En producción todos los puertos bindean a `127.0.0.1` — solo accesibles via nginx. Redis no expone puerto al exterior en ningún entorno.
+
+---
+
+## Actualizar n8n
+
+n8n no tiene actualización desde la UI web. El proceso es:
+
+```bash
+make n8n-update   # rebuild imagen custom + restart contenedor
+```
+
+Esto reconstruye la imagen con la última versión de n8n (actualiza `docker/n8n.Dockerfile`), reinicia el contenedor y preserva todos los datos en `./volumes/n8n`. Para controlar la versión exacta, edita la imagen base en `docker/n8n.Dockerfile`.
+
+---
+
+## Tailwind + DaisyUI
+
+Las versiones se gestionan en `theme/static_src/package.json` (devDependencies):
+
+- **Tailwind CSS**: `^4.2.2`
+- **DaisyUI**: `^5.5.19`
+
+En **desarrollo**: `make install` → `npm install` instala los paquetes y `python manage.py tailwind install`.
+
+En **producción**: el Dockerfile usa `npm ci && npm run build` en una stage Node aislada. El CSS compilado y minificado se copia a la imagen Python final. **Los módulos npm no están en la imagen de producción.**
+
+Para actualizar versiones: edita `package.json`, corre `npm update` en `theme/static_src/` y regenera `package-lock.json`.
+
+---
+
+## Archivos estáticos
+
+Whitenoise + nginx trabajando en conjunto:
+
+1. `collectstatic` genera archivos con hashes en el nombre (`styles.abc123.css`) y versiones `.gz` pre-comprimidas
+2. nginx intercepta `/static/` y sirve directamente desde `staticfiles/` con `gzip_static on` — usa los `.gz` sin comprimir on-the-fly
+3. Cache `immutable` con 365 días es seguro porque los filenames cambian en cada deploy
+
+---
+
+## Redis
+
+Redis es siempre activo y optimiza tres aspectos clave:
+
+| Aspecto | Sin Redis | Con Redis |
+|---|---|---|
+| Cache | `LocMemCache` por worker (no compartido) | Cache compartido entre los 3 workers Gunicorn |
+| Sesiones | Escrituras a PostgreSQL en cada request | Cache en memoria, sin tocar la DB |
+| django-axes | Escrituras a DB en cada intento fallido | Operaciones en cache, más rápido bajo ataques |
+
+---
+
+## Variables de entorno
+
+| Variable | Requerida | Descripción |
+|---|---|---|
+| `PROJECT_NAME` | Sí | Nombre usado en contenedores y nginx |
+| `DOMAIN` | Sí | Dominio principal de Django |
+| `SECRET_KEY` | Sí | Clave secreta de Django |
+| `DEBUG` | No | `False` en prod (default) |
+| `ALLOWED_HOSTS` | Sí | Dominios permitidos (CSV) |
+| `CSRF_TRUSTED_ORIGINS` | Sí | Orígenes confiables CSRF (CSV) |
+| `ADMIN_URL` | No | URL del admin (default: `admin/`) |
+| `APP_PORT` | No | Puerto Django (default: `8000`) |
+| `POSTGRES_MODE` | No | `container` o `host` (default: `container`) |
+| `POSTGRES_DB` | Sí | Nombre de la base de datos |
+| `POSTGRES_USER` | Sí | Usuario PostgreSQL |
+| `POSTGRES_PASSWORD` | Sí | Contraseña PostgreSQL |
+| `POSTGRES_HOST` | No | Host PostgreSQL (default: `postgres`) |
+| `POSTGRES_PORT` | No | Puerto PostgreSQL (default: `5432`) |
+| `REDIS_URL` | No | URL de Redis (default: `redis://redis:6379/0`) |
+| `N8N_DOMAIN` | No | Subdominio de n8n (activa el servicio) |
+| `N8N_PORT` | No | Puerto externo n8n (default: `8001`) |
+| `N8N_ENCRYPTION_KEY` | Si n8n | Clave de cifrado de n8n (**no cambiar**) |
+| `N8N_MCP_ENABLED` | No | `true` para habilitar n8n-MCP |
+| `N8N_MCP_PORT` | No | Puerto externo MCP (default: `8002`) |
+| `N8N_API_KEY` | Si MCP | API key de n8n para el servidor MCP |
+| `N8N_MCP_AUTH_TOKEN` | Si MCP | Token de autenticación del MCP |
+| `N8N_URL` | No | URL de n8n para llamadas desde Django |
+| `EMAIL_HOST` | No | SMTP host (activa email backend) |
+
+---
+
+## Comandos
+
+| Comando | Descripción |
+|---|---|
+| `make setup` | Wizard interactivo — genera `.env` |
+| `make install` | Instala dependencias Python y Tailwind |
+| `make dev-up` | Levanta servicios de desarrollo (Docker) |
+| `make dev-down` | Detiene servicios de desarrollo |
+| `make dev-logs` | Logs de servicios de desarrollo |
+| `make dev-check` | Verifica estado del entorno de desarrollo |
+| `make dev` | migrate + tailwind start + runserver |
+| `make migrate` | Ejecuta migraciones |
+| `make migrations` | Crea migraciones |
+| `make superuser` | Crea superusuario |
+| `make shell` | Django shell |
+| `make collect` | collectstatic |
+| `make db-shell` | Abre psql (PostgreSQL) o indica sqlite3 |
+| `make db-reset` | Elimina SQLite y vuelve a migrar |
+| `make n8n-export` | Exporta workflows de n8n dev a `n8n/workflows/` |
+| `make n8n-update` | Actualiza n8n en producción (rebuild + restart) |
+| `make check-ports` | Verifica disponibilidad de puertos |
+| `make nginx` | Instala config nginx (**solo primera vez**) |
+| `make deploy` | Despliega en VPS (git pull + verifica puertos + rebuild) |
+| `make logs` | Logs de Django en producción |
+| `make down` | Detiene contenedores de producción |
+
+---
 
 ## Estructura
 
 ```
-├── core/               # Configuración del proyecto
-│   ├── settings.py     # Settings único (dev y prod por variables de entorno)
-│   ├── urls.py
-│   ├── wsgi.py
-│   └── asgi.py
-├── home/               # App principal
-│   ├── sitemaps.py     # Sitemap de vistas estáticas
-│   └── migrations/
-├── theme/              # App Tailwind
-│   └── static_src/
-│       ├── package.json
-│       └── src/styles.css
-├── templates/
-│   ├── base.html       # Base con OG tags, favicon, meta description
-│   ├── 404.html
-│   ├── 500.html
-│   └── robots.txt
-├── static/
-│   └── img/
-│       ├── favicon.svg         # Reemplazar con tu favicon
-│       └── og-default.jpg      # Reemplazar con tu imagen OG (1200x630)
-├── n8n/
-│   └── workflows/              # Workflows exportados (versionados en git)
+├── core/                    # Configuración Django (settings, urls, wsgi)
+├── home/                    # App principal (index, sitemaps)
+├── templates/               # Templates globales (base, 404, 500, robots.txt)
+├── theme/                   # App Tailwind (static_src/ con npm build)
+├── static/                  # Assets estáticos (img, css)
+├── staticfiles/             # collectstatic output (generado)
+├── media/                   # Uploads de usuarios (generado)
+├── n8n/workflows/           # Workflows n8n versionados en git
+├── volumes/                 # Datos persistentes de contenedores (gitignored)
+├── db/                      # Datos PostgreSQL en producción (gitignored)
 ├── docker/
-│   ├── init-db.sql             # Crea la base de datos de n8n en postgres
-│   ├── n8n.Dockerfile          # Imagen custom n8n con Python 3.12
-│   └── n8n-export.sh           # Script de exportación de workflows
-├── volumes/            # Bind mounts de producción (generado, no versionado)
-├── db/                 # Datos PostgreSQL de producción (generado, no versionado)
-├── staticfiles/        # Salida de collectstatic (generado)
-├── media/              # Uploads de usuarios (generado)
-├── requirements.txt        # Dependencias de producción
-├── requirements-dev.txt    # Dependencias de desarrollo
-├── Dockerfile          # Multi-stage: Node (CSS) + Python
-├── docker-compose.yml      # Producción: Django + PostgreSQL (+ n8n con profile)
-├── docker-compose.dev.yml  # Desarrollo: PostgreSQL + n8n
-├── entrypoint.sh       # Migraciones + Gunicorn
-├── nginx.conf          # Plantilla nginx — bloque Django
-├── nginx-n8n.conf      # Plantilla nginx — bloque n8n (usado si N8N_DOMAIN está definido)
-├── nginx-deploy.sh     # Instala/actualiza config de nginx
-├── deploy.sh           # Script de despliegue en VPS
-└── Makefile
+│   ├── n8n.Dockerfile       # n8n con Python 3.12 (para Code nodes)
+│   ├── n8n-export.sh        # Script de exportación de workflows
+│   └── init-db.sql          # Crea la base de datos n8n al iniciar postgres
+├── Dockerfile               # Multi-stage: Node (CSS build) → Python (prod)
+├── docker-compose.yml       # Producción: postgres* + redis + django + n8n* + mcp*
+├── docker-compose.dev.yml   # Desarrollo: postgres* + redis + n8n* + mcp*
+├── entrypoint.sh            # Espera PG + Redis, collectstatic, migrate, gunicorn
+├── nginx.conf               # Template nginx Django
+├── nginx-n8n.conf           # Template nginx n8n (con marcador {{MCP_BLOCK}})
+├── nginx-n8n-mcp.conf       # Location block para n8n-MCP (SSE)
+├── nginx-deploy.sh          # Genera e instala config nginx (solo primera vez)
+├── deploy.sh                # Script de despliegue VPS
+├── setup.sh                 # Wizard de configuración inicial
+├── check-ports.sh           # Verifica disponibilidad de puertos
+├── Makefile
+├── .env.example             # Plantilla de variables de entorno
+└── requirements.txt         # Dependencias Python de producción
 ```
 
-## Desarrollo local
+`*` servicio opcional (Docker Compose profile)
 
-### 1. Clonar y configurar entorno
+---
 
-```bash
-git clone <repo>
-cd <proyecto>
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-make install
-```
+## Notas de seguridad
 
-### 2. Variables de entorno
+- **Admin URL aleatorio** — generado por `setup.sh`, desindexado via `robots.txt`
+- **Brute-force protection** — django-axes bloquea tras 5 intentos fallidos, 1h cooldown, usando Redis (no DB) como backend
+- **CSP headers** — política estricta vía django-csp, relajada en DEBUG para browser-reload
+- **HSTS** — habilitado en producción (1 año, incluye subdominios)
+- **Static files** — hashes en filenames + cache `immutable` 365 días, seguros porque cambian en cada deploy
 
-```bash
-cp .env.example .env
-```
+---
 
-Para desarrollo con Django local + SQLite, basta con:
+## Checklist de personalización
 
-```env
-DEBUG=True
-```
-
-Para desarrollo con PostgreSQL y n8n en Docker:
-
-```env
-DEBUG=True
-PROJECT_NAME=miproyecto
-POSTGRES_DB=miproyecto_db
-POSTGRES_USER=miproyecto_user
-POSTGRES_PASSWORD=contraseña
-N8N_ENCRYPTION_KEY=dev-key-cualquiera
-```
-
-### 3. Iniciar el servidor
-
-**Solo Django (SQLite):**
-```bash
-make dev
-```
-
-**Con PostgreSQL + n8n en Docker:**
-```bash
-make dev-up   # levanta PostgreSQL y n8n en Docker
-make dev      # corre Django localmente apuntando al postgres del contenedor
-```
-
-O manualmente en dos terminales:
-```bash
-# Terminal 1 — watcher de Tailwind
-python manage.py tailwind start
-
-# Terminal 2 — servidor Django
-python manage.py migrate
-python manage.py runserver
-```
-
-- Django: http://127.0.0.1:8000
-- n8n: http://localhost:5678
-
-## n8n — flujo dev → producción
-
-Los workflows se versionan en git dentro de `n8n/workflows/`.
-
-```bash
-# 1. Exportar workflows desde el contenedor de desarrollo
-make n8n-export
-
-# 2. Commitear y subir
-git add n8n/workflows/
-git commit -m "feat: actualizar workflows n8n"
-git push
-
-# 3. Desplegar (importa automáticamente en producción)
-make deploy
-```
-
-En producción, n8n corre en su propio subdominio: `https://proyecto-n8n.tudominio.com`.
-
-## Producción (VPS)
-
-### 1. Configurar el `.env`
-
-```bash
-cp .env.example .env
-nano .env
-```
-
-Variables obligatorias en producción:
-
-```env
-PROJECT_NAME=miproyecto
-DOMAIN=tudominio.com
-APP_PORT=8000
-ADMIN_URL=mi-panel-secreto/
-
-DEBUG=False
-SECRET_KEY=una-clave-secreta-segura
-
-POSTGRES_DB=miproyecto_db
-POSTGRES_USER=miproyecto_user
-POSTGRES_PASSWORD=contraseña-segura
-```
-
-Para habilitar n8n, añadir también:
-
-```env
-N8N_ENCRYPTION_KEY=clave-larga-y-secreta
-N8N_DOMAIN=proyecto-n8n.tudominio.com
-N8N_BASE_URL=https://proyecto-n8n.tudominio.com
-```
-
-> Si `N8N_DOMAIN` no está definido, el contenedor n8n no se levanta y el bloque nginx de n8n no se genera. No es necesario eliminar nada del proyecto — simplemente omitir esas variables.
-
-> `N8N_ENCRYPTION_KEY` debe mantenerse constante — cambiarla invalida todas las credenciales guardadas en n8n.
-
-### 2. Configurar nginx (primera vez)
-
-```bash
-make nginx
-```
-
-El script `nginx-deploy.sh`:
-1. Genera `{PROJECT_NAME}.conf` a partir de `nginx.conf`
-2. Si `N8N_DOMAIN` está definido, agrega el bloque de n8n desde `nginx-n8n.conf`
-3. Copia la config a `/etc/nginx/sites-available/` y crea el symlink
-4. Valida y recarga nginx
-
-> Solo ejecutar cuando cambie `nginx.conf`/`nginx-n8n.conf` o en el primer deploy. No se ejecuta en cada `make deploy` para no sobreescribir la config de Certbot.
-
-### 3. SSL con Certbot (primera vez)
-
-```bash
-sudo apt install certbot python3-certbot-nginx
-sudo certbot --nginx -d tudominio.com -d www.tudominio.com
-
-# Si n8n está habilitado:
-sudo certbot --nginx -d proyecto-n8n.tudominio.com
-```
-
-### 4. Desplegar
-
-```bash
-make deploy
-```
-
-El script `deploy.sh`:
-1. `git pull` para actualizar el código
-2. Si `N8N_DOMAIN` está definido: ajusta permisos del volumen n8n y activa el profile
-3. Reconstruye y reinicia los contenedores Docker (el Dockerfile compila el CSS con Node)
-
-## Settings
-
-El archivo `core/settings.py` se adapta automáticamente según las variables de entorno:
-
-| Variable presente | Comportamiento |
-|---|---|
-| `DEBUG=True` | SQLite, email en consola, Tailwind y browser-reload activos |
-| `POSTGRES_DB` definido | Usa PostgreSQL |
-| `EMAIL_HOST` definido | Usa backend SMTP |
-| `DEBUG=False` | HSTS, CSRF seguro, sin herramientas de dev |
-
-## Personalizar antes de usar
-
-- `static/img/favicon.svg` — reemplazar con el favicon del proyecto
-- `static/img/og-default.jpg` — imagen por defecto para redes sociales (1200×630px)
-- `ADMINS` en `settings.py` — cambiar el email del administrador
-- `LANGUAGE_CODE` y `TIME_ZONE` en `settings.py` — ajustar a tu región
-
-## Comandos
-
-```bash
-make install      # pip install + tailwind install
-make dev-up       # levanta PostgreSQL + n8n en Docker
-make dev          # migrate + tailwind start + runserver
-make dev-down     # detiene los contenedores de desarrollo
-make n8n-export   # exporta workflows de n8n a n8n/workflows/
-make migrate      # python manage.py migrate
-make migrations   # python manage.py makemigrations
-make superuser    # python manage.py createsuperuser
-make collect      # collectstatic
-make nginx        # instala/actualiza config de nginx (primera vez)
-make deploy       # bash deploy.sh
-make logs         # docker compose logs -f django
-make down         # docker compose down
-```
-
-```bash
-# Nueva app
-python manage.py startapp nombre_app
-
-# Acceder al contenedor Django
-docker compose exec django bash
-
-# Backup de la base de datos
-docker compose exec postgres pg_dump -U $POSTGRES_USER $POSTGRES_DB > backup.sql
-```
+- [ ] Cambiar favicon: reemplazar `static/img/favicon.svg`
+- [ ] Cambiar imagen OG: reemplazar `static/img/og-default.jpg`
+- [ ] Actualizar email de admin en `core/settings.py` → `ADMINS`
+- [ ] Ajustar zona horaria y locale → `TIME_ZONE`, `LANGUAGE_CODE` en `settings.py`
+- [ ] Personalizar tema DaisyUI en `theme/static_src/src/styles.css`
+- [ ] Al agregar nuevas apps: `INSTALLED_APPS` + `@source "../../../<app>"` en `styles.css`

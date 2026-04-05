@@ -109,11 +109,13 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
-WHITENOISE_MANIFEST_STRICT = False
+WHITENOISE_MANIFEST_STRICT = not DEBUG  # True en prod: rechaza archivos sin entrada en manifest
 
 STORAGES = {
     'staticfiles': {
-        'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage',
+        # CompressedManifestStaticFilesStorage: hashes en filenames (cache-busting seguro)
+        # + archivos .gz pre-generados que nginx sirve con gzip_static on
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
     },
     'default': {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',
@@ -151,10 +153,37 @@ if not DEBUG:
 
 X_FRAME_OPTIONS = 'DENY'
 
+# ── Redis (cache, sesiones) ───────────────────────────────────────────────────
+# En dev sin .env, se conecta a localhost:6379 (Docker Desktop expone el puerto al host).
+# En producción, .env siempre define REDIS_URL=redis://redis:6379/0 (nombre del servicio Docker).
+REDIS_URL = config('REDIS_URL', default='redis://localhost:6379/0')
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': REDIS_URL,
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        },
+    }
+}
+
+SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+SESSION_CACHE_ALIAS = 'default'
+
 # ── django-axes (protección brute force) ──────────────────────────────────────
 AXES_FAILURE_LIMIT = 5
 AXES_COOLOFF_TIME = 1  # hora
 AXES_LOCKOUT_PARAMETERS = ['ip_address', 'username']
+
+if DEBUG:
+    # En desarrollo se usa el handler de base de datos para no depender de Redis.
+    # Permite correr 'python manage.py runserver' sin contenedores activos.
+    AXES_HANDLER = 'axes.handlers.database.AxesDatabaseHandler'
+else:
+    # En producción Redis siempre está disponible — más rápido bajo ataques.
+    AXES_HANDLER = 'axes.handlers.cache.AxesCacheHandler'
+    AXES_CACHE = 'default'
 
 # ── Content Security Policy ───────────────────────────────────────────────────
 CSP_DEFAULT_SRC = ("'self'",)
@@ -163,6 +192,11 @@ CSP_STYLE_SRC = ("'self'",)
 CSP_IMG_SRC = ("'self'", "data:")
 CSP_FONT_SRC = ("'self'",)
 CSP_CONNECT_SRC = ("'self'",) if not DEBUG else ("'self'", "ws://localhost:*", "ws://127.0.0.1:*")
+
+# ── Integración n8n (opcional) ───────────────────────────────────────────────
+N8N_URL = config('N8N_URL', default='')
+N8N_API_KEY = config('N8N_API_KEY', default='')
+N8N_WEBHOOK_URL = config('N8N_WEBHOOK_URL', default='')
 
 # ── Admins y logging ──────────────────────────────────────────────────────────
 ADMINS = [('Admin', 'admin@example.com')]

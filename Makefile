@@ -1,6 +1,15 @@
-# ── Docker de desarrollo (PostgreSQL + n8n) ───────────────────────────────────
+# ── Configuración inicial ──────────────────────────────────────────────────────
+setup:
+	bash setup.sh
+
+# ── Docker de desarrollo (Redis + PostgreSQL + n8n opcionales) ─────────────────
 dev-up:
-	docker compose -f docker-compose.dev.yml up -d
+	@[ -f .env ] || { echo "Error: .env no encontrado. Ejecuta 'make setup' primero."; exit 1; }
+	@set -a && . ./.env && set +a; \
+	PROFILES="--profile postgres"; \
+	[ -n "$${N8N_DOMAIN}" ] && PROFILES="$$PROFILES --profile n8n"; \
+	[ "$${N8N_MCP_ENABLED}" = "true" ] && [ -n "$${N8N_DOMAIN}" ] && PROFILES="$$PROFILES --profile n8n-mcp"; \
+	docker compose -f docker-compose.dev.yml $$PROFILES up -d
 
 dev-down:
 	docker compose -f docker-compose.dev.yml down
@@ -8,19 +17,46 @@ dev-down:
 dev-logs:
 	docker compose -f docker-compose.dev.yml logs -f
 
+dev-check:
+	@echo "Verificando entorno de desarrollo..."
+	@[ -f .env ] && echo "  ✓ .env existe" || echo "  ✗ .env no encontrado — ejecuta: make setup"
+	@command -v python >/dev/null 2>&1 && echo "  ✓ Python disponible" || echo "  ✗ Python no encontrado"
+	@command -v docker >/dev/null 2>&1 && echo "  ✓ Docker disponible" || echo "  ✗ Docker no encontrado"
+	@docker compose -f docker-compose.dev.yml ps 2>/dev/null | grep -q "Up" \
+		&& echo "  ✓ Contenedores activos" \
+		|| echo "  ✗ Contenedores detenidos — ejecuta: make dev-up"
+	@python -c "import redis; r=redis.from_url('redis://localhost:6379/0'); r.ping()" 2>/dev/null \
+		&& echo "  ✓ Redis accesible en localhost:6379" \
+		|| echo "  ✗ Redis no accesible (normal sin make dev-up)"
+
 # ── n8n ───────────────────────────────────────────────────────────────────────
 n8n-export:
 	bash docker/n8n-export.sh
+
+# Actualizar n8n: pull nueva imagen + restart del contenedor
+# Los datos (workflows, credenciales) se preservan en el volumen ./volumes/n8n
+n8n-update:
+	@[ -f .env ] || { echo "Error: .env no encontrado."; exit 1; }
+	@set -a && . ./.env && set +a; \
+	[ -n "$${N8N_DOMAIN}" ] || { echo "Error: N8N_DOMAIN no definido en .env"; exit 1; }; \
+	echo "▶ Descargando nueva imagen de n8n..."; \
+	docker build -t $${PROJECT_NAME}_n8n:latest -f docker/n8n.Dockerfile .; \
+	echo "▶ Reiniciando contenedor n8n..."; \
+	docker compose --profile n8n up -d --no-deps n8n; \
+	echo "✓ n8n actualizado."
 
 # ── Django local ──────────────────────────────────────────────────────────────
 install:
 	pip install -r requirements-dev.txt
 	python manage.py tailwind install
 
+# Hot reload completo: Tailwind en background + runserver vigilando la carpeta CSS.
+# Cuando Tailwind recompila static/css/dist/, Django detecta el cambio y
+# django-browser-reload notifica al browser para recargar automáticamente.
 dev:
 	python manage.py migrate
 	python manage.py tailwind start &
-	python manage.py runserver
+	python manage.py runserver --watch-dir static/css/dist
 
 tailwind:
 	python manage.py tailwind start
@@ -40,6 +76,19 @@ superuser:
 collect:
 	python manage.py collectstatic --noinput
 
+# ── Base de datos (dev) ────────────────────────────────────────────────────────
+db-shell:
+	@[ -f .env ] && . ./.env; \
+	if [ -n "$${POSTGRES_DB}" ]; then \
+		docker compose -f docker-compose.dev.yml exec postgres psql -U $${POSTGRES_USER} -d $${POSTGRES_DB}; \
+	else \
+		echo "Modo SQLite — usa: sqlite3 db.sqlite3"; \
+	fi
+
+db-reset:
+	@[ -f db.sqlite3 ] && rm db.sqlite3 && echo "SQLite eliminado." || true
+	python manage.py migrate
+
 # ── Producción ────────────────────────────────────────────────────────────────
 deploy:
 	bash deploy.sh
@@ -47,10 +96,15 @@ deploy:
 nginx:
 	bash nginx-deploy.sh
 
+check-ports:
+	bash check-ports.sh
+
 logs:
 	docker compose logs -f django
 
 down:
 	docker compose down
 
-.PHONY: dev-up dev-down dev-logs n8n-export install dev tailwind migrate migrations shell superuser collect deploy nginx logs down
+.PHONY: setup dev-up dev-down dev-logs dev-check n8n-export n8n-update install dev tailwind \
+        migrate migrations shell superuser collect db-shell db-reset \
+        deploy nginx check-ports logs down

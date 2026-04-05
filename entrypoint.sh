@@ -20,6 +20,21 @@ except Exception:
 done
 echo 'PostgreSQL está listo.'
 
+echo 'Esperando a que Redis esté disponible...'
+until python -c "
+import redis, os, sys
+try:
+    r = redis.from_url(os.environ.get('REDIS_URL', 'redis://redis:6379/0'))
+    r.ping()
+    sys.exit(0)
+except Exception:
+    sys.exit(1)
+"; do
+  echo '  Redis no disponible, reintentando en 2s...'
+  sleep 2
+done
+echo 'Redis está listo.'
+
 echo 'Recopilando archivos estáticos...'
 python manage.py collectstatic --noinput
 chmod -R o+rX /app/staticfiles

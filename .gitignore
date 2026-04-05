@@ -47,11 +47,11 @@ Thumbs.db
 volumes/
 db/
 
-# Nginx generado por deploy.sh (usa nombre del proyecto)
+# Nginx generado por nginx-deploy.sh (usa PROJECT_NAME como nombre)
 *.conf
 !nginx.conf
 !nginx-n8n.conf
-.env
-.venv/
+!nginx-n8n-mcp.conf
+
+# Archivos de Claude Code
 .claude/
-.vscode/
