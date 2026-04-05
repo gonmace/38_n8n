@@ -59,13 +59,12 @@ install:
 	@echo ""
 	@[ -f .env ] || echo "  Siguiente paso: ejecuta 'make setup' para generar el .env"
 
-# Hot reload completo: Tailwind en background + runserver vigilando la carpeta CSS.
-# Cuando Tailwind recompila static/css/dist/, Django detecta el cambio y
-# django-browser-reload notifica al browser para recargar automáticamente.
+# Tailwind en background + runserver con django-browser-reload.
+# Python/templates: recarga automática. CSS: refrescar manualmente tras Tailwind recompilar.
 dev:
 	python manage.py migrate
 	python manage.py tailwind start &
-	python manage.py runserver --watch-dir static/css/dist
+	python manage.py runserver
 
 tailwind:
 	python manage.py tailwind start
