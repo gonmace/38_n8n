@@ -8,10 +8,10 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - postgres_data:/var/lib/postgresql/data/
+      - ./db:/var/lib/postgresql/data/
       - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     ports:
-      - "${POSTGRES_HOST_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
     networks:
       - dev_network
     healthcheck:
@@ -39,7 +39,7 @@ services:
     container_name: ${PROJECT_NAME:-dev}_n8n
     restart: unless-stopped
     ports:
-      - "${N8N_PORT:-8001}:5678"
+      - "127.0.0.1:${N8N_PORT:-8001}:5678"
     environment:
       DB_TYPE: postgresdb
       DB_POSTGRESDB_HOST: ${POSTGRES_HOST:-postgres}
@@ -53,7 +53,7 @@ services:
       N8N_PORT: 5678
       N8N_PROTOCOL: http
     volumes:
-      - n8n_data:/home/node/.n8n
+      - ./volumes/n8n:/home/node/.n8n
     depends_on:
       postgres:
         condition: service_healthy
@@ -76,16 +76,12 @@ services:
       AUTH_TOKEN: ${N8N_MCP_AUTH_TOKEN:-dev-mcp-token}
       MCP_MODE: http
     ports:
-      - "${N8N_MCP_PORT:-8002}:3000"
+      - "127.0.0.1:${N8N_MCP_PORT:-8002}:3000"
     depends_on:
       n8n:
         condition: service_healthy
     networks:
       - dev_network
-
-volumes:
-  postgres_data:
-  n8n_data:
 
 networks:
   dev_network:
