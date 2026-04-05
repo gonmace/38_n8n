@@ -4,6 +4,7 @@
 # Uso: bash setup.sh
 
 set -e
+set -a  # auto-exportar todas las variables para que Python las vea via os.environ
 
 # ── Utilidades ─────────────────────────────────────────────────────────────────
 gen_secret() {

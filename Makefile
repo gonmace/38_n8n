@@ -27,7 +27,11 @@ dev-check:
 		|| echo "  ✗ Contenedores detenidos — ejecuta: make dev-up"
 	@python -c "import redis; r=redis.from_url('redis://localhost:6379/0'); r.ping()" 2>/dev/null \
 		&& echo "  ✓ Redis accesible en localhost:6379" \
-		|| echo "  ✗ Redis no accesible (normal sin make dev-up)"
+		|| { \
+			python -c "import redis" 2>/dev/null \
+				&& echo "  ✗ Redis no accesible — ¿está make dev-up corriendo?" \
+				|| echo "  ✗ Redis no accesible — paquete 'redis' no instalado (ejecuta: make install)"; \
+		}
 
 # ── n8n ───────────────────────────────────────────────────────────────────────
 n8n-export:
