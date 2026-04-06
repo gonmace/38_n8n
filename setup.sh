@@ -36,6 +36,16 @@ if [ -f .env ]; then
     echo ""
 fi
 
+# ── Entorno ──────────────────────────────────────────────────────────────────
+read -p "¿Entorno? (dev/prod) [prod]: " ENV_TYPE
+ENV_TYPE=${ENV_TYPE:-prod}
+if [ "${ENV_TYPE}" = "dev" ]; then
+    DEBUG=True
+else
+    DEBUG=False
+fi
+echo ""
+
 # ── Nombre del proyecto ───────────────────────────────────────────────────────
 DIR_NAME=$(basename "$(pwd)")
 read -p "Nombre del proyecto [${DIR_NAME}]: " PROJECT_NAME
@@ -192,7 +202,7 @@ lines = [
     "",
     "# ── Django ────────────────────────────────────────────────────────────────",
     kv("SECRET_KEY", os.environ.get("SECRET_KEY", "")),
-    "DEBUG=False",
+    kv("DEBUG", os.environ.get("DEBUG", "False")),
     kv("ALLOWED_HOSTS", os.environ.get("ALLOWED_HOSTS", "")),
     kv("CSRF_TRUSTED_ORIGINS", os.environ.get("CSRF_TRUSTED_ORIGINS", "")),
     kv("ADMIN_URL", os.environ.get("ADMIN_URL", "admin/")),
