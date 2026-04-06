@@ -15,36 +15,37 @@ gen_hex() {
     python3 -c "import secrets; print(secrets.token_hex($1))"
 }
 
+# Lee un valor del .env existente (si existe)
+get_env() {
+    local val
+    val=$(grep "^${1}=" .env 2>/dev/null | head -1 | cut -d'=' -f2-)
+    val=$(echo "$val" | sed "s/^'//;s/'$//")
+    echo "$val"
+}
+
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "   Setup: Django Skeleton"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# ── Verificar .env existente ──────────────────────────────────────────────────
 if [ -f .env ]; then
-    echo "Ya existe un archivo .env con la siguiente configuración:"
-    echo ""
-    grep -v '^#' .env | grep -v '^$' | head -10
-    echo "..."
-    echo ""
-    read -p "¿Sobreescribir el .env existente? (s/N): " OVERWRITE
-    if [ "${OVERWRITE}" != "s" ] && [ "${OVERWRITE}" != "S" ]; then
-        echo "Cancelado. El archivo .env no fue modificado."
-        exit 0
-    fi
+    echo "  .env existente detectado — los valores actuales se usarán como default."
     echo ""
 fi
 
 # ── Entorno ───────────────────────────────────────────────────────────────────
-read -p "¿Entorno? (dev/prod) [prod]: " ENV_TYPE
-ENV_TYPE=${ENV_TYPE:-prod}
+_ENV_DEFAULT=$(get_env DEBUG)
+[ "${_ENV_DEFAULT}" = "True" ] && _ENV_DEFAULT=dev || _ENV_DEFAULT=prod
+read -p "¿Entorno? (dev/prod) [${_ENV_DEFAULT}]: " ENV_TYPE
+ENV_TYPE=${ENV_TYPE:-${_ENV_DEFAULT}}
 echo ""
 
 # ── Nombre del proyecto ───────────────────────────────────────────────────────
 DIR_NAME=$(basename "$(pwd)")
-read -p "Nombre del proyecto [${DIR_NAME}]: " PROJECT_NAME
-PROJECT_NAME=${PROJECT_NAME:-${DIR_NAME}}
+_DEFAULT=$(get_env PROJECT_NAME)
+read -p "Nombre del proyecto [${_DEFAULT:-${DIR_NAME}}]: " PROJECT_NAME
+PROJECT_NAME=${PROJECT_NAME:-${_DEFAULT:-${DIR_NAME}}}
 PROJECT_NAME=$(echo "${PROJECT_NAME}" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')
 echo ""
 
@@ -56,8 +57,9 @@ if [ "${ENV_TYPE}" = "dev" ]; then
     DOMAIN=localhost
 
     # Puertos
-    read -p "Puerto base de la app Django [8000]: " APP_PORT
-    APP_PORT=${APP_PORT:-8000}
+    _DEFAULT=$(get_env APP_PORT)
+    read -p "Puerto base de la app Django [${_DEFAULT:-8000}]: " APP_PORT
+    APP_PORT=${APP_PORT:-${_DEFAULT:-8000}}
     N8N_PORT=$((APP_PORT + 1))
     N8N_MCP_PORT=$((APP_PORT + 2))
     echo ""
@@ -67,13 +69,16 @@ if [ "${ENV_TYPE}" = "dev" ]; then
     POSTGRES_HOST=localhost
     POSTGRES_DB="${PROJECT_NAME}_db"
     POSTGRES_USER="${PROJECT_NAME}_user"
-    POSTGRES_PASSWORD=$(gen_secret 24)
+    _PG_PASS=$(get_env POSTGRES_PASSWORD)
+    POSTGRES_PASSWORD=${_PG_PASS:-$(gen_secret 24)}
     POSTGRES_PORT=5432
     POSTGRES_HOST_PORT=5432
 
     # n8n
-    read -p "¿Habilitar n8n? (s/N): " ENABLE_N8N
-    ENABLE_N8N=${ENABLE_N8N:-N}
+    _N8N_CURRENT=$(get_env N8N_DOMAIN)
+    [ -n "${_N8N_CURRENT}" ] && _N8N_DEFAULT="s" || _N8N_DEFAULT="N"
+    read -p "¿Habilitar n8n? (s/N) [${_N8N_DEFAULT}]: " ENABLE_N8N
+    ENABLE_N8N=${ENABLE_N8N:-${_N8N_DEFAULT}}
     echo ""
 
     N8N_DOMAIN=""
@@ -83,58 +88,72 @@ if [ "${ENV_TYPE}" = "dev" ]; then
 
     if [ "${ENABLE_N8N}" = "s" ] || [ "${ENABLE_N8N}" = "S" ]; then
         N8N_DOMAIN=localhost
-        N8N_ENCRYPTION_KEY=$(gen_secret 32)
+        _N8N_KEY=$(get_env N8N_ENCRYPTION_KEY)
+        N8N_ENCRYPTION_KEY=${_N8N_KEY:-$(gen_secret 32)}
 
-        read -p "  ¿Habilitar n8n-MCP? (s/N): " ENABLE_MCP
-        ENABLE_MCP=${ENABLE_MCP:-N}
+        _MCP_CURRENT=$(get_env N8N_MCP_ENABLED)
+        [ "${_MCP_CURRENT}" = "true" ] && _MCP_DEFAULT="s" || _MCP_DEFAULT="N"
+        read -p "  ¿Habilitar n8n-MCP? (s/N) [${_MCP_DEFAULT}]: " ENABLE_MCP
+        ENABLE_MCP=${ENABLE_MCP:-${_MCP_DEFAULT}}
         echo ""
 
         if [ "${ENABLE_MCP}" = "s" ] || [ "${ENABLE_MCP}" = "S" ]; then
             N8N_MCP_ENABLED=true
-            N8N_MCP_AUTH_TOKEN=$(gen_secret 32)
+            _MCP_TOKEN=$(get_env N8N_MCP_AUTH_TOKEN)
+            N8N_MCP_AUTH_TOKEN=${_MCP_TOKEN:-$(gen_secret 32)}
         fi
     fi
 
     # Secretos
-    SECRET_KEY=$(gen_secret 50)
+    _SK=$(get_env SECRET_KEY)
+    SECRET_KEY=${_SK:-$(gen_secret 50)}
     ADMIN_URL=admin/
     ALLOWED_HOSTS="localhost,127.0.0.1"
     CSRF_TRUSTED_ORIGINS="http://localhost:${APP_PORT}"
     EMAIL_HOST=""
 
 # ══════════════════════════════════════════════════════════════════════════════
-# ── MODO PROD ─────────────────────────────────────────────────────────────────
+# ── MODO PROD ─────────────────────────────────────────════════════════════════
 # ══════════════════════════════════════════════════════════════════════════════
 else
     DEBUG=False
 
     # Dominio
+    _DEFAULT=$(get_env DOMAIN)
     while true; do
-        read -p "Dominio para Django (ej: miapp.com): " DOMAIN
+        read -p "Dominio para Django (ej: miapp.com) [${_DEFAULT}]: " DOMAIN
+        DOMAIN=${DOMAIN:-${_DEFAULT}}
         [ -n "${DOMAIN}" ] && break
         echo "  El dominio no puede estar vacío."
     done
     echo ""
 
     # PostgreSQL
+    _PG_MODE=$(get_env POSTGRES_MODE)
     echo "PostgreSQL:"
     echo "  1) Contenedor Docker — recomendado"
     echo "  2) Host del servidor — PostgreSQL ya instalado en el VPS"
     echo ""
-    read -p "Opción [1]: " PG_CHOICE
-    PG_CHOICE=${PG_CHOICE:-1}
+    [ "${_PG_MODE}" = "host" ] && _PG_OPT=2 || _PG_OPT=1
+    read -p "Opción [${_PG_OPT}]: " PG_CHOICE
+    PG_CHOICE=${PG_CHOICE:-${_PG_OPT}}
     echo ""
 
     if [ "${PG_CHOICE}" = "2" ]; then
         POSTGRES_MODE=host
         POSTGRES_HOST=host.docker.internal
-        read -p "  Base de datos PostgreSQL: " POSTGRES_DB
-        POSTGRES_DB=${POSTGRES_DB:-${PROJECT_NAME}_db}
-        read -p "  Usuario PostgreSQL: " POSTGRES_USER
-        POSTGRES_USER=${POSTGRES_USER:-${PROJECT_NAME}_user}
-        read -sp "  Contraseña PostgreSQL: " POSTGRES_PASSWORD; echo
-        read -p "  Puerto PostgreSQL [5432]: " POSTGRES_PORT
-        POSTGRES_PORT=${POSTGRES_PORT:-5432}
+        _DEFAULT=$(get_env POSTGRES_DB)
+        read -p "  Base de datos [${_DEFAULT:-${PROJECT_NAME}_db}]: " POSTGRES_DB
+        POSTGRES_DB=${POSTGRES_DB:-${_DEFAULT:-${PROJECT_NAME}_db}}
+        _DEFAULT=$(get_env POSTGRES_USER)
+        read -p "  Usuario [${_DEFAULT:-${PROJECT_NAME}_user}]: " POSTGRES_USER
+        POSTGRES_USER=${POSTGRES_USER:-${_DEFAULT:-${PROJECT_NAME}_user}}
+        read -sp "  Contraseña (Enter para mantener actual): " POSTGRES_PASSWORD_NEW; echo
+        _PG_PASS=$(get_env POSTGRES_PASSWORD)
+        POSTGRES_PASSWORD=${POSTGRES_PASSWORD_NEW:-${_PG_PASS}}
+        _DEFAULT=$(get_env POSTGRES_PORT)
+        read -p "  Puerto [${_DEFAULT:-5432}]: " POSTGRES_PORT
+        POSTGRES_PORT=${POSTGRES_PORT:-${_DEFAULT:-5432}}
         POSTGRES_HOST_PORT=${POSTGRES_PORT}
         echo ""
         echo "  NOTA: Asegúrate de que PostgreSQL esté configurado para aceptar"
@@ -143,23 +162,29 @@ else
     else
         POSTGRES_MODE=container
         POSTGRES_HOST=localhost
-        POSTGRES_DB="${PROJECT_NAME}_db"
-        POSTGRES_USER="${PROJECT_NAME}_user"
-        POSTGRES_PASSWORD=$(gen_secret 24)
+        _DEFAULT=$(get_env POSTGRES_DB)
+        POSTGRES_DB=${_DEFAULT:-${PROJECT_NAME}_db}
+        _DEFAULT=$(get_env POSTGRES_USER)
+        POSTGRES_USER=${_DEFAULT:-${PROJECT_NAME}_user}
+        _PG_PASS=$(get_env POSTGRES_PASSWORD)
+        POSTGRES_PASSWORD=${_PG_PASS:-$(gen_secret 24)}
         POSTGRES_PORT=5432
         POSTGRES_HOST_PORT=5432
     fi
 
     # Puertos
-    read -p "Puerto base de la app Django [8000]: " APP_PORT
-    APP_PORT=${APP_PORT:-8000}
+    _DEFAULT=$(get_env APP_PORT)
+    read -p "Puerto base de la app Django [${_DEFAULT:-8000}]: " APP_PORT
+    APP_PORT=${APP_PORT:-${_DEFAULT:-8000}}
     N8N_PORT=$((APP_PORT + 1))
     N8N_MCP_PORT=$((APP_PORT + 2))
     echo ""
 
     # n8n
-    read -p "¿Habilitar n8n? (s/N): " ENABLE_N8N
-    ENABLE_N8N=${ENABLE_N8N:-N}
+    _N8N_CURRENT=$(get_env N8N_DOMAIN)
+    [ -n "${_N8N_CURRENT}" ] && _N8N_DEFAULT="s" || _N8N_DEFAULT="N"
+    read -p "¿Habilitar n8n? (s/N) [${_N8N_DEFAULT}]: " ENABLE_N8N
+    ENABLE_N8N=${ENABLE_N8N:-${_N8N_DEFAULT}}
     echo ""
 
     N8N_DOMAIN=""
@@ -170,36 +195,44 @@ else
 
     if [ "${ENABLE_N8N}" = "s" ] || [ "${ENABLE_N8N}" = "S" ]; then
         while true; do
-            read -p "  Dominio para n8n (ej: n8n.miapp.com): " N8N_DOMAIN
+            read -p "  Dominio para n8n [${_N8N_CURRENT:-n8n.${DOMAIN}}]: " N8N_DOMAIN
+            N8N_DOMAIN=${N8N_DOMAIN:-${_N8N_CURRENT:-n8n.${DOMAIN}}}
             [ -n "${N8N_DOMAIN}" ] && break
             echo "  El dominio de n8n no puede estar vacío."
         done
-        N8N_ENCRYPTION_KEY=$(gen_secret 32)
-        echo "  N8N_ENCRYPTION_KEY generada automáticamente."
+        _N8N_KEY=$(get_env N8N_ENCRYPTION_KEY)
+        N8N_ENCRYPTION_KEY=${_N8N_KEY:-$(gen_secret 32)}
+        [ -z "${_N8N_KEY}" ] && echo "  N8N_ENCRYPTION_KEY generada automáticamente."
         echo ""
 
-        read -p "  ¿Habilitar n8n-MCP? (s/N): " ENABLE_MCP
-        ENABLE_MCP=${ENABLE_MCP:-N}
+        _MCP_CURRENT=$(get_env N8N_MCP_ENABLED)
+        [ "${_MCP_CURRENT}" = "true" ] && _MCP_DEFAULT="s" || _MCP_DEFAULT="N"
+        read -p "  ¿Habilitar n8n-MCP? (s/N) [${_MCP_DEFAULT}]: " ENABLE_MCP
+        ENABLE_MCP=${ENABLE_MCP:-${_MCP_DEFAULT}}
         echo ""
 
         if [ "${ENABLE_MCP}" = "s" ] || [ "${ENABLE_MCP}" = "S" ]; then
             N8N_MCP_ENABLED=true
-            N8N_MCP_AUTH_TOKEN=$(gen_secret 32)
-            echo "  N8N_MCP_AUTH_TOKEN generada automáticamente."
+            _MCP_TOKEN=$(get_env N8N_MCP_AUTH_TOKEN)
+            N8N_MCP_AUTH_TOKEN=${_MCP_TOKEN:-$(gen_secret 32)}
+            [ -z "${_MCP_TOKEN}" ] && echo "  N8N_MCP_AUTH_TOKEN generada automáticamente."
             echo "  Recuerda completar N8N_API_KEY en .env después de configurar n8n."
             echo ""
         fi
     fi
 
     # Admin URL
+    _DEFAULT=$(get_env ADMIN_URL)
     RANDOM_ADMIN="$(gen_hex 6)/"
-    read -p "URL del panel admin [${RANDOM_ADMIN}]: " ADMIN_URL
-    ADMIN_URL=${ADMIN_URL:-${RANDOM_ADMIN}}
+    read -p "URL del panel admin [${_DEFAULT:-${RANDOM_ADMIN}}]: " ADMIN_URL
+    ADMIN_URL=${ADMIN_URL:-${_DEFAULT:-${RANDOM_ADMIN}}}
     echo ""
 
     # Email SMTP
-    read -p "¿Configurar email SMTP? (s/N): " ENABLE_EMAIL
-    ENABLE_EMAIL=${ENABLE_EMAIL:-N}
+    _EMAIL_CURRENT=$(get_env EMAIL_HOST)
+    [ -n "${_EMAIL_CURRENT}" ] && _EMAIL_DEFAULT="s" || _EMAIL_DEFAULT="N"
+    read -p "¿Configurar email SMTP? (s/N) [${_EMAIL_DEFAULT}]: " ENABLE_EMAIL
+    ENABLE_EMAIL=${ENABLE_EMAIL:-${_EMAIL_DEFAULT}}
     echo ""
 
     EMAIL_HOST=""
@@ -210,18 +243,27 @@ else
     DEFAULT_FROM_EMAIL="noreply@${DOMAIN}"
 
     if [ "${ENABLE_EMAIL}" = "s" ] || [ "${ENABLE_EMAIL}" = "S" ]; then
-        read -p "  SMTP Host (ej: smtp.gmail.com): " EMAIL_HOST
-        read -p "  Puerto [587]: " EMAIL_PORT
-        EMAIL_PORT=${EMAIL_PORT:-587}
-        read -p "  Usuario: " EMAIL_HOST_USER
-        read -sp "  Contraseña: " EMAIL_HOST_PASSWORD; echo
-        read -p "  From email [noreply@${DOMAIN}]: " DEFAULT_FROM_EMAIL
-        DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-noreply@${DOMAIN}}
+        _DEFAULT=$(get_env EMAIL_HOST)
+        read -p "  SMTP Host [${_DEFAULT:-smtp.gmail.com}]: " EMAIL_HOST
+        EMAIL_HOST=${EMAIL_HOST:-${_DEFAULT:-smtp.gmail.com}}
+        _DEFAULT=$(get_env EMAIL_PORT)
+        read -p "  Puerto [${_DEFAULT:-587}]: " EMAIL_PORT
+        EMAIL_PORT=${EMAIL_PORT:-${_DEFAULT:-587}}
+        _DEFAULT=$(get_env EMAIL_HOST_USER)
+        read -p "  Usuario [${_DEFAULT}]: " EMAIL_HOST_USER
+        EMAIL_HOST_USER=${EMAIL_HOST_USER:-${_DEFAULT}}
+        read -sp "  Contraseña (Enter para mantener actual): " EMAIL_HOST_PASSWORD_NEW; echo
+        _EMAIL_PASS=$(get_env EMAIL_HOST_PASSWORD)
+        EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD_NEW:-${_EMAIL_PASS}}
+        _DEFAULT=$(get_env DEFAULT_FROM_EMAIL)
+        read -p "  From email [${_DEFAULT:-noreply@${DOMAIN}}]: " DEFAULT_FROM_EMAIL
+        DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-${_DEFAULT:-noreply@${DOMAIN}}}
         echo ""
     fi
 
     # Secretos
-    SECRET_KEY=$(gen_secret 50)
+    _SK=$(get_env SECRET_KEY)
+    SECRET_KEY=${_SK:-$(gen_secret 50)}
     ALLOWED_HOSTS="${DOMAIN}"
     CSRF_TRUSTED_ORIGINS="https://${DOMAIN}"
 fi
@@ -231,7 +273,6 @@ python3 - << 'PYEOF'
 import os
 
 def kv(key, value):
-    """Escapa el valor si contiene caracteres especiales del shell."""
     if value and any(c in value for c in '$`"\\'):
         value = "'" + value.replace("'", "'\\''") + "'"
     return f"{key}={value}"
@@ -274,7 +315,8 @@ lines = [
 ]
 
 if not is_dev:
-    kv("DOMAIN", os.environ.get("DOMAIN", ""))
+    lines.insert(4, kv("DOMAIN", os.environ.get("DOMAIN", "")))
+    lines.insert(5, "")
 
 email_host = os.environ.get("EMAIL_HOST", "")
 if email_host:
