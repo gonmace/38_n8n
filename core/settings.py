@@ -47,8 +47,8 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-INSTALLED_APPS += ['tailwind', 'theme']
 TAILWIND_APP_NAME = 'theme'
+INSTALLED_APPS += ['tailwind', 'theme']
 
 if DEBUG:
     INSTALLED_APPS += ['django_browser_reload']
