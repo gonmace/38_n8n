@@ -79,7 +79,7 @@ if [ "${PG_CHOICE}" = "2" ]; then
     echo ""
 else
     POSTGRES_MODE=container
-    POSTGRES_HOST=postgres
+    POSTGRES_HOST=localhost  # Django corre en el host; Docker expone postgres en localhost:5432
     POSTGRES_DB="${PROJECT_NAME}_db"
     POSTGRES_USER="${PROJECT_NAME}_user"
     POSTGRES_PASSWORD=$(gen_secret 24)

@@ -36,6 +36,8 @@ services:
     restart: always
     env_file:
       - .env
+    environment:
+      - POSTGRES_HOST=postgres  # dentro de Docker el hostname es el nombre del servicio
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
