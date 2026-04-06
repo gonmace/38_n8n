@@ -13,7 +13,7 @@ echo "▶ Exportando workflows..."
 docker compose -f docker-compose.dev.yml exec n8n \
     mkdir -p /home/node/.n8n/exports/workflows/
 docker compose -f docker-compose.dev.yml exec n8n \
-    n8n export:workflow --all --output=/home/node/.n8n/exports/workflows/
+    n8n export:workflow --all --separate --output=/home/node/.n8n/exports/workflows/
 
 docker compose -f docker-compose.dev.yml cp \
     n8n:/home/node/.n8n/exports/workflows/. "$WORKFLOWS_DIR/"
@@ -22,7 +22,7 @@ echo "▶ Exportando credenciales..."
 docker compose -f docker-compose.dev.yml exec n8n \
     mkdir -p /home/node/.n8n/exports/credentials/
 docker compose -f docker-compose.dev.yml exec n8n \
-    n8n export:credentials --all --output=/home/node/.n8n/exports/credentials/
+    n8n export:credentials --all --separate --output=/home/node/.n8n/exports/credentials/
 
 docker compose -f docker-compose.dev.yml cp \
     n8n:/home/node/.n8n/exports/credentials/. "$CREDENTIALS_DIR/"
