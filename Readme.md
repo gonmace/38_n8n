@@ -13,6 +13,7 @@ Skeleton para desplegar Django en un VPS con nginx como reverse proxy. Incluye s
 | CSS | Tailwind CSS v4.2 + DaisyUI v5.5 |
 | Archivos estáticos | Whitenoise (`CompressedManifestStaticFilesStorage`) + nginx (`gzip_static`) |
 | Seguridad | django-axes (cache backend), django-csp, HSTS |
+| Hot reload (dev) | django-browser-reload |
 | Automatización (opcional) | n8n |
 | MCP Server (opcional) | n8n-MCP |
 | Reverse proxy | Nginx (host) + Let's Encrypt |
@@ -67,27 +68,23 @@ make dev-check         # verifica que todo esté corriendo
 make dev               # migrate + tailwind watcher + runserver
 ```
 
-En ambos casos Django corre nativo en el host (no en Docker). Redis en Docker Desktop es accesible en `localhost:6379`.
+En ambos casos Django corre nativo en el host (no en Docker). Redis en Docker es accesible en `localhost:6379`.
 
-### Hot reload completo
+### Hot reload
 
-`make dev` lanza Tailwind en background y Django con `--watch-dir static/css/dist`. El flujo completo:
+`make dev` lanza Tailwind en background y Django con `django-browser-reload`:
 
-1. Editas `theme/static_src/src/styles.css`
-2. Tailwind detecta el cambio y recompila `static/css/dist/styles.css` (< 100ms)
-3. Django detecta el cambio en el directorio vigilado y reinicia
-4. `django-browser-reload` notifica al browser y la página recarga automáticamente
-
-Para Python y templates: Django recarga directamente, sin pasar por el paso 2-3.
+- **Python y templates**: Django recarga automáticamente → el browser se refresca solo
+- **CSS**: Tailwind recompila el CSS → refrescar el browser manualmente
 
 ### Dos terminales (alternativa a `make dev`)
 
 ```bash
-# Terminal 1 — watcher CSS con hot reload
+# Terminal 1 — watcher CSS
 python manage.py tailwind start
 
-# Terminal 2 — servidor Django vigilando CSS
-python manage.py runserver --watch-dir static/css/dist
+# Terminal 2 — servidor Django
+python manage.py runserver
 ```
 
 ### Comportamiento automático según `.env`
@@ -183,7 +180,7 @@ n8n no tiene actualización desde la UI web. El proceso es:
 make n8n-update   # rebuild imagen custom + restart contenedor
 ```
 
-Esto reconstruye la imagen con la última versión de n8n (actualiza `docker/n8n.Dockerfile`), reinicia el contenedor y preserva todos los datos en `./volumes/n8n`. Para controlar la versión exacta, edita la imagen base en `docker/n8n.Dockerfile`.
+Esto reconstruye la imagen con la última versión de n8n, reinicia el contenedor y preserva todos los datos en `./volumes/n8n`. Para controlar la versión exacta, edita la imagen base en `docker/n8n.Dockerfile`.
 
 ---
 
@@ -194,7 +191,7 @@ Las versiones se gestionan en `theme/static_src/package.json` (devDependencies):
 - **Tailwind CSS**: `^4.2.2`
 - **DaisyUI**: `^5.5.19`
 
-En **desarrollo**: `make install` → `npm install` instala los paquetes y `python manage.py tailwind install`.
+En **desarrollo**: `make install` → `npm install` instala los paquetes.
 
 En **producción**: el Dockerfile usa `npm ci && npm run build` en una stage Node aislada. El CSS compilado y minificado se copia a la imagen Python final. **Los módulos npm no están en la imagen de producción.**
 
@@ -295,6 +292,7 @@ Redis es siempre activo y optimiza tres aspectos clave:
 ├── media/                   # Uploads de usuarios (generado)
 ├── n8n/workflows/           # Workflows n8n versionados en git
 ├── volumes/                 # Datos persistentes de contenedores (gitignored)
+│   └── n8n/                 # Datos de n8n (workflows, credenciales)
 ├── db/                      # Datos PostgreSQL en producción (gitignored)
 ├── docker/
 │   ├── n8n.Dockerfile       # n8n con Python 3.12 (para Code nodes)
@@ -323,7 +321,7 @@ Redis es siempre activo y optimiza tres aspectos clave:
 ## Notas de seguridad
 
 - **Admin URL aleatorio** — generado por `setup.sh`, desindexado via `robots.txt`
-- **Brute-force protection** — django-axes bloquea tras 5 intentos fallidos, 1h cooldown, usando Redis (no DB) como backend
+- **Brute-force protection** — django-axes bloquea tras 5 intentos fallidos, 1h cooldown, usando Redis (no DB) como backend en producción
 - **CSP headers** — política estricta vía django-csp, relajada en DEBUG para browser-reload
 - **HSTS** — habilitado en producción (1 año, incluye subdominios)
 - **Static files** — hashes en filenames + cache `immutable` 365 días, seguros porque cambian en cada deploy
