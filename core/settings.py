@@ -22,6 +22,7 @@ ADMIN_URL = config('ADMIN_URL', default='admin/')
 
 INSTALLED_APPS = [
     'home',
+    'chat',
     'axes',
 
     'django.contrib.admin',
@@ -201,10 +202,16 @@ CSP_IMG_SRC = ("'self'", "data:")
 CSP_FONT_SRC = ("'self'",)
 CSP_CONNECT_SRC = ("'self'",) if not DEBUG else ("'self'", "ws://localhost:*", "ws://127.0.0.1:*")
 
+# ── Auth redirects ────────────────────────────────────────────────────────────
+LOGIN_URL = '/accounts/login/'
+LOGIN_REDIRECT_URL = '/chat/'
+LOGOUT_REDIRECT_URL = '/'
+
 # ── Integración n8n (opcional) ───────────────────────────────────────────────
 N8N_URL = config('N8N_URL', default='')
 N8N_API_KEY = config('N8N_API_KEY', default='')
 N8N_WEBHOOK_URL = config('N8N_WEBHOOK_URL', default='')
+N8N_TEMPLATE_WORKFLOW_ID = config('N8N_TEMPLATE_WORKFLOW_ID', default='')
 
 # ── Admins y logging ──────────────────────────────────────────────────────────
 ADMINS = [('Admin', 'admin@example.com')]

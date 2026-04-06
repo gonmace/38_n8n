@@ -18,6 +18,8 @@ urlpatterns = [
         content_type='text/plain',
         extra_context={'ADMIN_URL': settings.ADMIN_URL},
     )),
+    path('accounts/', include('django.contrib.auth.urls')),
+    path('chat/', include('chat.urls')),
     path('', include('home.urls')),
 ]
 

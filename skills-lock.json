@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "django-best-practices": {
+      "source": "Reyretee/django-skills",
+      "sourceType": "github",
+      "computedHash": "fb4398512d1c6e2695565d46c03dcdcb53aebd9dd9c9e29f190b96b17045c59e"
+    }
+  }
+}

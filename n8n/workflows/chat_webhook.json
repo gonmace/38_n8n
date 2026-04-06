@@ -1,0 +1,246 @@
+{
+  "name": "Chat Webhook",
+  "nodes": [
+    {
+      "id": "a1b2c3d4-0001-0001-0001-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chat",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "a1b2c3d4-0002-0002-0002-000000000002",
+      "name": "Check Turn Count",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition1",
+              "leftValue": "={{ $json.turn_count }}",
+              "rightValue": 5,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a1b2c3d4-0003-0003-0003-000000000003",
+      "name": "AI Agent (Normal)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [680, 420],
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Webhook').item.json.message }}",
+        "options": {
+          "systemMessage": "={{ $('Webhook').item.json.system_prompt }}\n\n{% if $('Webhook').item.json.previous_summary %}Resumen de la conversación anterior: {{ $('Webhook').item.json.previous_summary }}{% endif %}"
+        }
+      }
+    },
+    {
+      "id": "a1b2c3d4-0004-0004-0004-000000000004",
+      "name": "Window Buffer Memory (Normal)",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [680, 560],
+      "parameters": {
+        "sessionKey": "={{ $('Webhook').item.json.session_id }}",
+        "contextWindowLength": 10
+      }
+    },
+    {
+      "id": "a1b2c3d4-0005-0005-0005-000000000005",
+      "name": "AI Agent (With Summary)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [680, 160],
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Webhook').item.json.message }}",
+        "options": {
+          "systemMessage": "={{ $('Webhook').item.json.system_prompt }}\n\nResumen de la conversación anterior:\n={{ $('Webhook').item.json.previous_summary }}\n\nAdemás, al responder al usuario incluye al FINAL de tu respuesta (separado por ---SUMMARY---) un resumen breve (2-3 oraciones) de los puntos clave de toda la conversación incluyendo este mensaje para uso interno del sistema."
+        }
+      }
+    },
+    {
+      "id": "a1b2c3d4-0006-0006-0006-000000000006",
+      "name": "Window Buffer Memory (Summary)",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [680, 60],
+      "parameters": {
+        "sessionKey": "={{ $('Webhook').item.json.session_id }}",
+        "contextWindowLength": 10
+      }
+    },
+    {
+      "id": "a1b2c3d4-0007-0007-0007-000000000007",
+      "name": "Extract Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 160],
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.output || '';\nconst parts = raw.split('---SUMMARY---');\nconst response = parts[0].trim();\nconst newSummary = parts[1] ? parts[1].trim() : '';\n\n// Detect facts (simple pattern: 'me llamo X', 'mi amigo es X', etc.)\nconst detectedFacts = [];\n\n// Return structured response\nreturn [{\n  json: {\n    response: response,\n    new_summary: newSummary || null,\n    detected_facts: detectedFacts,\n    memory_reset: !!newSummary\n  }\n}];"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0008-0008-0008-000000000008",
+      "name": "Format Normal Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 420],
+      "parameters": {
+        "jsCode": "const output = $input.first().json.output || '';\n\n// Simple fact detection patterns (Spanish)\nconst detectedFacts = [];\nconst text = output.toLowerCase();\n\n// Example: detect names mentioned as 'me llamo X' or 'mi nombre es X'\nconst nameMatch = text.match(/(?:me llamo|mi nombre es|soy)\\s+([a-záéíóúñ]+)/i);\nif (nameMatch) {\n  detectedFacts.push({\n    key: 'Mi nombre',\n    value: nameMatch[1],\n    category: 'personal'\n  });\n}\n\nreturn [{\n  json: {\n    response: output,\n    new_summary: null,\n    detected_facts: detectedFacts,\n    memory_reset: false\n  }\n}];"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0009-0009-0009-000000000009",
+      "name": "Merge Responses",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1100, 300],
+      "parameters": {
+        "mode": "chooseBranch",
+        "chooseBranch": {
+          "mode": "waitForBoth"
+        }
+      }
+    },
+    {
+      "id": "a1b2c3d4-0010-0010-0010-000000000010",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1300, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Check Turn Count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Turn Count": {
+      "main": [
+        [
+          {
+            "node": "AI Agent (With Summary)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Agent (Normal)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent (With Summary)": {
+      "main": [
+        [
+          {
+            "node": "Extract Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent (Normal)": {
+      "main": [
+        [
+          {
+            "node": "Format Normal Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Summary": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Normal Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Window Buffer Memory (Normal)": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent (Normal)",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Window Buffer Memory (Summary)": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent (With Summary)",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": ""
+  }
+}

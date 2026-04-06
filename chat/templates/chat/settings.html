@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configuración</title>
+  {% load static tailwind_tags %}
+  <link rel="icon" type="image/svg+xml" href="{% static 'img/favicon.svg' %}">
+  {% tailwind_css %}
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+
+    [data-theme="dark"] {
+      --bg:        #212121;
+      --bg-nav:    rgba(28,28,28,.92);
+      --surface:   #2f2f2f;
+      --surface2:  #3a3a3a;
+      --border:    rgba(255,255,255,0.08);
+      --sep:       rgba(255,255,255,0.06);
+      --text-1:    #ececec;
+      --text-2:    #8e8ea0;
+      --text-3:    #555566;
+      --accent:    #10a37f;
+      --blue:      #0a84ff;
+      --red:       #ff453a;
+      --green:     #30d158;
+    }
+    [data-theme="light"] {
+      --bg:        #f4f4f4;
+      --bg-nav:    rgba(244,244,244,.92);
+      --surface:   #ffffff;
+      --surface2:  #f4f4f4;
+      --border:    rgba(0,0,0,0.08);
+      --sep:       rgba(0,0,0,0.06);
+      --text-1:    #0d0d0d;
+      --text-2:    #6e6e80;
+      --text-3:    #acacbe;
+      --accent:    #10a37f;
+      --blue:      #007aff;
+      --red:       #ff3b30;
+      --green:     #34c759;
+    }
+
+    body { background: var(--bg); color: var(--text-1); }
+
+    /* ── Nav ─────────────────────────────────────────────────────────────── */
+    .topnav {
+      position: sticky; top: 0; z-index: 10;
+      display: flex; align-items: center;
+      padding: 0 20px; height: 56px;
+      background: var(--bg-nav);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .back-link {
+      display: flex; align-items: center; gap: 5px;
+      font-size: .875rem; font-weight: 500; color: var(--blue);
+      text-decoration: none; padding: 6px 8px; border-radius: 8px;
+      margin-left: -8px; transition: background .15s;
+    }
+    .back-link:hover { background: rgba(10,132,255,.1); }
+    .nav-title {
+      flex: 1; text-align: center;
+      font-size: .9375rem; font-weight: 600; color: var(--text-1);
+    }
+    .logout-btn {
+      font-size: .875rem; font-weight: 500; color: var(--red);
+      background: none; border: none; cursor: pointer;
+      font-family: inherit; padding: 6px 8px; border-radius: 8px;
+      margin-right: -8px; transition: background .15s;
+    }
+    .logout-btn:hover { background: rgba(255,69,58,.1); }
+
+    /* ── Page body ───────────────────────────────────────────────────────── */
+    .page { max-width: 640px; margin: 0 auto; padding: 28px 20px 60px; display: flex; flex-direction: column; gap: 32px; }
+
+    /* ── Section ─────────────────────────────────────────────────────────── */
+    .section-label {
+      font-size: .6875rem; font-weight: 600; letter-spacing: .06em;
+      text-transform: uppercase; color: var(--text-3);
+      padding: 0 4px; margin-bottom: 8px;
+    }
+
+    /* ── Card ────────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    /* ── Row ─────────────────────────────────────────────────────────────── */
+    .row {
+      padding: 13px 16px;
+      border-bottom: 1px solid var(--sep);
+      display: flex; flex-direction: column; gap: 5px;
+    }
+    .row:last-child { border-bottom: none; }
+    .row-inline {
+      flex-direction: row; align-items: center; justify-content: space-between; gap: 12px;
+    }
+
+    .row-label {
+      font-size: .6875rem; font-weight: 600; letter-spacing: .04em;
+      text-transform: uppercase; color: var(--text-3);
+    }
+    .row-hint { font-size: .75rem; color: var(--text-2); margin-top: 2px; }
+
+    /* ── Inputs ──────────────────────────────────────────────────────────── */
+    .field {
+      width: 100%; background: transparent; border: none; outline: none;
+      font-size: .9375rem; color: var(--text-1);
+      font-family: inherit; line-height: 1.5;
+    }
+    .field::placeholder { color: var(--text-3); }
+    .field:focus { outline: none; box-shadow: none; }
+    textarea.field { resize: none; min-height: 88px; }
+
+    select.field {
+      appearance: none; -webkit-appearance: none;
+      cursor: pointer;
+    }
+
+    /* ── Buttons ─────────────────────────────────────────────────────────── */
+    .btn-primary {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 9px 20px; border-radius: 10px;
+      background: var(--accent); color: #fff;
+      font-size: .875rem; font-weight: 600;
+      font-family: inherit; border: none; cursor: pointer;
+      transition: opacity .15s, transform .1s;
+    }
+    .btn-primary:hover { opacity: .88; }
+    .btn-primary:active { transform: scale(.97); }
+
+    .btn-secondary {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 9px 18px; border-radius: 10px;
+      background: var(--surface2); color: var(--blue);
+      font-size: .875rem; font-weight: 500;
+      font-family: inherit; border: 1px solid var(--border); cursor: pointer;
+      transition: background .15s;
+    }
+    .btn-secondary:hover { background: var(--border); }
+
+    .btn-icon {
+      display: flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px; border-radius: 8px;
+      background: transparent; border: none; cursor: pointer;
+      color: var(--red); transition: background .15s;
+    }
+    .btn-icon:hover { background: rgba(255,69,58,.12); }
+
+    .card-footer { padding: 12px 16px; display: flex; justify-content: flex-end; }
+
+    /* ── Toast messages ──────────────────────────────────────────────────── */
+    .toast {
+      display: flex; align-items: center; gap: 9px;
+      padding: 11px 14px; border-radius: 12px;
+      font-size: .875rem; font-weight: 500;
+    }
+    .toast.success { background: rgba(48,209,88,.15); color: var(--green); border: 1px solid rgba(48,209,88,.25); }
+    .toast.error   { background: rgba(255,69,58,.15);  color: var(--red);   border: 1px solid rgba(255,69,58,.25); }
+    [data-theme="light"] .toast.success { background: rgba(52,199,89,.12); color: #1a7f37; }
+    [data-theme="light"] .toast.error   { background: rgba(255,59,48,.10); }
+
+    /* ── Memory tag ──────────────────────────────────────────────────────── */
+    .tag {
+      font-size: .6875rem; font-weight: 500; padding: 3px 8px;
+      border-radius: 6px; background: var(--surface2);
+      color: var(--text-2); border: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    /* ── Empty state ─────────────────────────────────────────────────────── */
+    .empty {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 36px 20px; gap: 8px; color: var(--text-3);
+    }
+    .empty-icon { font-size: 36px; opacity: .35; }
+
+    /* ── Details / n8n ───────────────────────────────────────────────────── */
+    details summary { list-style: none; }
+    details summary::-webkit-details-marker { display: none; }
+    .details-summary {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 13px 16px; cursor: pointer;
+    }
+    .details-summary svg { transition: transform .2s; flex-shrink: 0; }
+    details[open] .details-summary svg { transform: rotate(180deg); }
+    .details-body {
+      padding: 14px 16px;
+      border-top: 1px solid var(--sep);
+      font-size: .875rem; color: var(--text-2); line-height: 1.65;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .details-body strong { color: var(--text-1); }
+  </style>
+</head>
+
+<body>
+
+{# ── Nav ──────────────────────────────────────────────────────────────────── #}
+<nav class="topnav">
+  <a href="{% url 'chat:list' %}" class="back-link">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+    </svg>
+    Volver
+  </a>
+  <p class="nav-title">Configuración</p>
+  <form method="post" action="{% url 'logout' %}">
+    {% csrf_token %}
+    <button type="submit" class="logout-btn">Salir</button>
+  </form>
+</nav>
+
+{# ── Page ─────────────────────────────────────────────────────────────────── #}
+<div class="page">
+
+  {# Toast messages #}
+  {% for message in messages %}
+  <div class="toast {% if message.tags == 'error' %}error{% else %}success{% endif %}">
+    {% if message.tags == 'error' %}
+    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+    {% else %}
+    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    {% endif %}
+    {{ message }}
+  </div>
+  {% endfor %}
+
+  {# ── Asistente ────────────────────────────────────────────────────────── #}
+  <section>
+    <p class="section-label">Mi asistente</p>
+    <form method="post">
+      {% csrf_token %}
+      <div class="card">
+
+        <div class="row">
+          <p class="row-label">Nombre</p>
+          <input class="field" type="text"
+                 name="{{ form.assistant_name.html_name }}"
+                 id="{{ form.assistant_name.id_for_label }}"
+                 value="{{ form.assistant_name.value|default:'' }}"
+                 placeholder="Nombre del asistente">
+          <p class="row-hint">¿Cómo quieres llamar a tu asistente?</p>
+        </div>
+
+        <div class="row">
+          <p class="row-label">Emoji</p>
+          <input class="field" type="text"
+                 name="{{ form.avatar_emoji.html_name }}"
+                 id="{{ form.avatar_emoji.id_for_label }}"
+                 value="{{ form.avatar_emoji.value|default:'' }}"
+                 placeholder="🤖">
+          <p class="row-hint">Elige un emoji · 🤖 🦜 🐉 🧙 🦁 🐬 🦊 🐸 👾 🎩</p>
+        </div>
+
+        <div class="row">
+          <p class="row-label">Personalidad</p>
+          <textarea class="field"
+                    name="{{ form.system_prompt.html_name }}"
+                    id="{{ form.system_prompt.id_for_label }}"
+                    rows="4"
+                    placeholder="Ej: Eres un pirata que dice ¡Arrr! y te llamas Barbanegra.">{{ form.system_prompt.value|default:'' }}</textarea>
+          <p class="row-hint">Define cómo se comporta y habla tu asistente</p>
+        </div>
+
+        <div class="card-footer">
+          <button type="submit" class="btn-primary">Guardar cambios</button>
+        </div>
+      </div>
+    </form>
+  </section>
+
+  {# ── Memoria ──────────────────────────────────────────────────────────── #}
+  <section>
+    <p class="section-label">Lo que recuerdo de ti</p>
+    <p style="font-size:.8125rem; color:var(--text-2); padding:0 4px; margin-bottom:10px; line-height:1.5;">
+      El asistente usará estos datos en todas las conversaciones. Puedes agregarlos tú mismo o el asistente los aprenderá cuando se los cuentes.
+    </p>
+
+    {% if facts %}
+    <div class="card" style="margin-bottom:12px;">
+      {% for fact in facts %}
+      <div class="row row-inline">
+        <div style="flex:1; min-width:0;">
+          <p style="font-size:.9375rem; font-weight:500; color:var(--text-1);">{{ fact.key }}</p>
+          <p style="font-size:.875rem; color:var(--text-2); margin-top:2px;">{{ fact.value }}</p>
+        </div>
+        <span class="tag">{{ fact.category }}</span>
+        <form method="post" action="{% url 'chat:fact_delete' fact.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn-icon" title="Eliminar" onclick="return confirm('¿Eliminar este recuerdo?')">
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+            </svg>
+          </button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="card" style="margin-bottom:12px;">
+      <div class="empty">
+        <span class="empty-icon">🧠</span>
+        <p style="font-size:.875rem; color:var(--text-2);">Nada guardado aún</p>
+        <p style="font-size:.75rem; color:var(--text-3); text-align:center;">
+          Cuéntale cosas al asistente o agrégalas manualmente
+        </p>
+      </div>
+    </div>
+    {% endif %}
+
+    {# Agregar hecho #}
+    <div class="card">
+      <form method="post" action="{% url 'chat:fact_add' %}">
+        {% csrf_token %}
+        <div class="row">
+          <p class="row-label">Categoría</p>
+          <select class="field" name="{{ fact_form.category.html_name }}">
+            {% for val, label in fact_form.fields.category.choices %}
+            <option value="{{ val }}" {% if fact_form.category.value == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="row">
+          <p class="row-label">Qué recordar</p>
+          <input class="field" type="text"
+                 name="{{ fact_form.key.html_name }}"
+                 value="{{ fact_form.key.value|default:'' }}"
+                 placeholder="Ej: Color favorito">
+        </div>
+        <div class="row">
+          <p class="row-label">Valor</p>
+          <input class="field" type="text"
+                 name="{{ fact_form.value.html_name }}"
+                 value="{{ fact_form.value.value|default:'' }}"
+                 placeholder="Ej: Azul">
+        </div>
+        <div class="card-footer">
+          <button type="submit" class="btn-secondary">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+            </svg>
+            Agregar recuerdo
+          </button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  {# ── n8n ──────────────────────────────────────────────────────────────── #}
+  <section>
+    <p class="section-label">Aprende n8n</p>
+    <div class="card">
+      <details>
+        <summary>
+          <div class="details-summary">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span style="font-size:18px; line-height:1;">⚙️</span>
+              <span style="font-size:.9375rem; font-weight:500; color:var(--text-1);">Flujos de trabajo con n8n</span>
+            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="color:var(--text-3);">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </div>
+        </summary>
+        <div class="details-body">
+          <p><strong>¿Qué es n8n?</strong> Es una herramienta visual para conectar aplicaciones y crear automatizaciones. Tu chat usa n8n para enviar mensajes a la IA.</p>
+          <p><strong>Tu workflow:</strong> Cada usuario puede tener su propio flujo que puede modificar para cambiar cómo responde el asistente.</p>
+          <p>Pide al administrador acceso a n8n para explorar y personalizar tu workflow.</p>
+        </div>
+      </details>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'dark');
+</script>
+
+{% if debug %}
+  {% url 'django_browser_reload:reload' as reload_url %}
+  <script src="{{ reload_url }}" defer></script>
+{% endif %}
+
+</body>
+</html>

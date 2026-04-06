@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crear cuenta</title>
+  {% load static tailwind_tags %}
+  <link rel="icon" type="image/svg+xml" href="{% static 'img/favicon.svg' %}">
+  {% tailwind_css %}
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 24px;
+    }
+
+    [data-theme="light"] {
+      --c-bg:       #f2f2f7;
+      --c-surface:  #ffffff;
+      --c-sep:      rgba(60,60,67,0.12);
+      --c-label:    #000000;
+      --c-label2:   rgba(60,60,67,0.6);
+      --c-label3:   rgba(60,60,67,0.3);
+      --c-blue:     #007aff;
+      --c-red:      #ff3b30;
+      --c-green:    #34c759;
+    }
+    [data-theme="dark"] {
+      --c-bg:       #000000;
+      --c-surface:  #1c1c1e;
+      --c-sep:      rgba(84,84,88,0.65);
+      --c-label:    #ffffff;
+      --c-label2:   rgba(235,235,245,0.6);
+      --c-label3:   rgba(235,235,245,0.3);
+      --c-blue:     #0a84ff;
+      --c-red:      #ff453a;
+      --c-green:    #30d158;
+    }
+
+    body { background: var(--c-bg); color: var(--c-label); }
+
+    .card {
+      width: 100%; max-width: 360px;
+      display: flex; flex-direction: column; gap: 24px;
+    }
+
+    .logo-wrap { text-align: center; }
+    .logo-icon {
+      width: 64px; height: 64px; border-radius: 20px; margin: 0 auto 12px;
+      background: linear-gradient(145deg, #10a37f 0%, #0a84ff 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 30px; line-height: 1;
+      box-shadow: 0 8px 24px rgba(16,163,127,.3);
+    }
+    .logo-title { font-size: 1.25rem; font-weight: 700; letter-spacing: -.015em; }
+    .logo-sub   { font-size: .875rem; color: var(--c-label2); margin-top: 4px; }
+
+    .section-label {
+      font-size: .6875rem; font-weight: 600; letter-spacing: .06em;
+      text-transform: uppercase; color: var(--c-label3);
+      padding: 0 4px; margin-bottom: 6px;
+    }
+
+    .field-group {
+      background: var(--c-surface);
+      border-radius: 14px;
+      overflow: hidden;
+      border: .5px solid var(--c-sep);
+    }
+    .field {
+      display: flex; align-items: center;
+      border-bottom: .5px solid var(--c-sep);
+    }
+    .field:last-child { border-bottom: none; }
+    .field input,
+    .field select {
+      width: 100%; padding: 13px 16px;
+      background: transparent; border: none; outline: none;
+      font-size: .9375rem; color: var(--c-label);
+      font-family: inherit;
+      -webkit-appearance: none; appearance: none;
+    }
+    .field input::placeholder { color: var(--c-label3); }
+    .field select option { background: var(--c-surface); }
+
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; }
+    .field-row .field { border-bottom: none; }
+    .field-row .field:first-child { border-right: .5px solid var(--c-sep); }
+
+    .err-box {
+      display: flex; align-items: flex-start; gap: 8px;
+      padding: 10px 14px; border-radius: 12px;
+      background: rgba(255,69,58,.15); color: var(--c-red);
+      font-size: .875rem; font-weight: 500;
+      border: 1px solid rgba(255,69,58,.25);
+    }
+    [data-theme="light"] .err-box {
+      background: rgba(255,59,48,.1);
+      border-color: rgba(255,59,48,.2);
+    }
+
+    .field-err {
+      font-size: .8125rem; color: var(--c-red);
+      padding: 0 4px; margin-top: -4px;
+    }
+
+    .submit-btn {
+      width: 100%; padding: 13px;
+      background: var(--c-green); color: #fff;
+      border: none; border-radius: 14px;
+      font-size: 1rem; font-weight: 600;
+      font-family: inherit; cursor: pointer;
+      letter-spacing: -.01em;
+      transition: opacity .15s, transform .1s;
+    }
+    .submit-btn:hover  { opacity: .88; }
+    .submit-btn:active { transform: scale(.97); }
+
+    .login-link {
+      text-align: center; font-size: .875rem; color: var(--c-label2);
+    }
+    .login-link a { color: var(--c-blue); text-decoration: none; font-weight: 500; }
+    .login-link a:hover { text-decoration: underline; }
+
+    .footer-note { text-align: center; font-size: .75rem; color: var(--c-label3); }
+  </style>
+</head>
+<body>
+  <div class="card">
+
+    <div class="logo-wrap">
+      <div class="logo-icon">🤖</div>
+      <p class="logo-title">Crear cuenta</p>
+      <p class="logo-sub">Rellena los datos para empezar</p>
+    </div>
+
+    {% if form.non_field_errors %}
+    <div class="err-box">
+      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2" style="flex-shrink:0;margin-top:1px"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+      <span>{{ form.non_field_errors|join:" " }}</span>
+    </div>
+    {% endif %}
+
+    <form method="post" style="display:flex; flex-direction:column; gap:18px;">
+      {% csrf_token %}
+
+      {# Nombre y apellido #}
+      <div>
+        <p class="section-label">Nombre completo</p>
+        <div class="field-group">
+          <div class="field-row field-group" style="border-radius:14px;">
+            <div class="field">
+              <input type="text" name="first_name" placeholder="Nombre"
+                     value="{{ form.first_name.value|default:'' }}"
+                     autocomplete="given-name" autofocus>
+            </div>
+            <div class="field">
+              <input type="text" name="last_name" placeholder="Apellido"
+                     value="{{ form.last_name.value|default:'' }}"
+                     autocomplete="family-name">
+            </div>
+          </div>
+        </div>
+        {% if form.first_name.errors or form.last_name.errors %}
+        <p class="field-err">{{ form.first_name.errors|join:" " }} {{ form.last_name.errors|join:" " }}</p>
+        {% endif %}
+      </div>
+
+      {# Sexo y fecha de nacimiento #}
+      <div>
+        <p class="section-label">Información personal</p>
+        <div class="field-group">
+          <div class="field">
+            <select name="sex">
+              {% for val, label in form.fields.sex.choices %}
+              <option value="{{ val }}" {% if form.sex.value == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <input type="date" name="birth_date"
+                   value="{{ form.birth_date.value|default:'' }}"
+                   style="color-scheme: dark;">
+          </div>
+        </div>
+      </div>
+
+      {# Cuenta #}
+      <div>
+        <p class="section-label">Cuenta</p>
+        <div class="field-group">
+          <div class="field">
+            <input type="text" name="username" placeholder="Nombre de usuario"
+                   value="{{ form.username.value|default:'' }}"
+                   autocomplete="username">
+          </div>
+          <div class="field">
+            <input type="email" name="email" placeholder="Correo electrónico (opcional)"
+                   value="{{ form.email.value|default:'' }}"
+                   autocomplete="email">
+          </div>
+        </div>
+        {% if form.username.errors %}
+        <p class="field-err">{{ form.username.errors|join:" " }}</p>
+        {% endif %}
+      </div>
+
+      {# Contraseña #}
+      <div>
+        <p class="section-label">Contraseña</p>
+        <div class="field-group">
+          <div class="field">
+            <input type="password" name="password1" placeholder="Contraseña"
+                   autocomplete="new-password">
+          </div>
+          <div class="field">
+            <input type="password" name="password2" placeholder="Confirmar contraseña"
+                   autocomplete="new-password">
+          </div>
+        </div>
+        {% if form.password1.errors or form.password2.errors %}
+        <p class="field-err">{{ form.password1.errors|join:" " }} {{ form.password2.errors|join:" " }}</p>
+        {% endif %}
+      </div>
+
+      <button type="submit" class="submit-btn">Crear cuenta</button>
+    </form>
+
+    <p class="login-link">¿Ya tienes cuenta? <a href="{% url 'login' %}">Iniciar sesión</a></p>
+    <p class="footer-note">Powered by Django · n8n</p>
+
+  </div>
+
+  <script>
+    document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'dark');
+  </script>
+</body>
+</html>
