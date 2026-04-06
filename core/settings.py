@@ -53,7 +53,9 @@ if DEBUG:
     INSTALLED_APPS += ['django_browser_reload']
     MIDDLEWARE += ['django_browser_reload.middleware.BrowserReloadMiddleware']
     INTERNAL_IPS = ['127.0.0.1', '::1']
-    NPM_BIN_PATH = r'C:\Program Files\nodejs\npm.cmd'
+    import sys
+    if sys.platform == 'win32':
+        NPM_BIN_PATH = r'C:\Program Files\nodejs\npm.cmd'
 
 AUTHENTICATION_BACKENDS = [
     'axes.backends.AxesStandaloneBackend',
