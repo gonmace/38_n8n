@@ -52,7 +52,12 @@ _textarea_cls = 'textarea textarea-bordered w-full'
 class UserProfileForm(forms.ModelForm):
     class Meta:
         model = UserProfile
-        fields = ['system_prompt', 'assistant_name', 'avatar_emoji']
+        fields = [
+            'system_prompt', 'assistant_name', 'avatar_emoji',
+            'use_structured_prompt',
+            'prompt_rol', 'prompt_contexto', 'prompt_comportamiento',
+            'prompt_formato', 'prompt_restricciones',
+        ]
         widgets = {
             'system_prompt': forms.Textarea(attrs={
                 'class': _textarea_cls,
@@ -67,6 +72,26 @@ class UserProfileForm(forms.ModelForm):
                 'class': _input_cls,
                 'placeholder': '🤖',
                 'maxlength': '10',
+            }),
+            'prompt_rol': forms.Textarea(attrs={
+                'class': _textarea_cls, 'rows': 3,
+                'placeholder': 'Ej: Eres un experto en nutrición infantil con 10 años de experiencia. Tu nombre es Nutri y eres amable y paciente.',
+            }),
+            'prompt_contexto': forms.Textarea(attrs={
+                'class': _textarea_cls, 'rows': 3,
+                'placeholder': 'Ej: Asistes a padres de familia en la app NutriKids. Ayudas a planificar comidas saludables para niños de 3 a 12 años.',
+            }),
+            'prompt_comportamiento': forms.Textarea(attrs={
+                'class': _textarea_cls, 'rows': 3,
+                'placeholder': 'Ej: Responde siempre con empatía. Usa lenguaje simple. Sugiere consultar al pediatra para casos médicos.',
+            }),
+            'prompt_formato': forms.Textarea(attrs={
+                'class': _textarea_cls, 'rows': 3,
+                'placeholder': 'Ej: Respuestas cortas (máx 3 párrafos). En español. Usa listas cuando sea útil. Sin markdown excesivo.',
+            }),
+            'prompt_restricciones': forms.Textarea(attrs={
+                'class': _textarea_cls, 'rows': 3,
+                'placeholder': 'Ej: No diagnostiques enfermedades. No recomiendes suplementos sin base médica. No hables de política.',
             }),
         }
 

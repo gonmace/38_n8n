@@ -262,14 +262,78 @@
           <p class="row-hint">Elige un emoji · 🤖 🦜 🐉 🧙 🦁 🐬 🦊 🐸 👾 🎩</p>
         </div>
 
-        <div class="row">
-          <p class="row-label">Personalidad</p>
-          <textarea class="field"
-                    name="{{ form.system_prompt.html_name }}"
-                    id="{{ form.system_prompt.id_for_label }}"
-                    rows="4"
-                    placeholder="Ej: Eres un pirata que dice ¡Arrr! y te llamas Barbanegra.">{{ form.system_prompt.value|default:'' }}</textarea>
-          <p class="row-hint">Define cómo se comporta y habla tu asistente</p>
+        {# Toggle modo prompt #}
+        <div class="row" style="flex-direction:row; align-items:center; justify-content:space-between; gap:12px;">
+          <div>
+            <p class="row-label">Prompt estructurado</p>
+            <p class="row-hint" style="margin-top:2px;">Define el prompt por secciones en lugar de texto libre</p>
+          </div>
+          <label style="position:relative; display:inline-block; width:44px; height:26px; flex-shrink:0;">
+            <input type="checkbox"
+                   name="{{ form.use_structured_prompt.html_name }}"
+                   id="{{ form.use_structured_prompt.id_for_label }}"
+                   {% if form.use_structured_prompt.value %}checked{% endif %}
+                   onchange="togglePromptMode(this.checked)"
+                   style="opacity:0; width:0; height:0; position:absolute;">
+            <span id="toggle-track" style="
+              position:absolute; cursor:pointer; inset:0; border-radius:26px;
+              background:{% if form.use_structured_prompt.value %}var(--accent){% else %}var(--text-3){% endif %};
+              transition:.2s;
+            ">
+              <span style="
+                position:absolute; content:''; height:20px; width:20px; left:3px; bottom:3px;
+                background:#fff; border-radius:50%; transition:.2s;
+                transform:{% if form.use_structured_prompt.value %}translateX(18px){% else %}translateX(0){% endif %};
+              " id="toggle-thumb"></span>
+            </span>
+          </label>
+        </div>
+
+        {# Modo simple #}
+        <div id="prompt-simple">
+          <div class="row">
+            <p class="row-label">Personalidad</p>
+            <textarea class="field"
+                      name="{{ form.system_prompt.html_name }}"
+                      id="{{ form.system_prompt.id_for_label }}"
+                      rows="4"
+                      placeholder="Ej: Eres un pirata que dice ¡Arrr! y te llamas Barbanegra.">{{ form.system_prompt.value|default:'' }}</textarea>
+            <p class="row-hint">Define cómo se comporta y habla tu asistente en texto libre</p>
+          </div>
+        </div>
+
+        {# Modo estructurado #}
+        <div id="prompt-structured">
+          <div class="row">
+            <p class="row-label">1 · Rol</p>
+            <textarea class="field" name="{{ form.prompt_rol.html_name }}" rows="3"
+                      placeholder="{{ form.fields.prompt_rol.widget.attrs.placeholder }}">{{ form.prompt_rol.value|default:'' }}</textarea>
+            <p class="row-hint">Quién es el asistente: identidad, expertise, personalidad</p>
+          </div>
+          <div class="row">
+            <p class="row-label">2 · Contexto</p>
+            <textarea class="field" name="{{ form.prompt_contexto.html_name }}" rows="3"
+                      placeholder="{{ form.fields.prompt_contexto.widget.attrs.placeholder }}">{{ form.prompt_contexto.value|default:'' }}</textarea>
+            <p class="row-hint">Para qué existe este asistente, en qué plataforma o empresa</p>
+          </div>
+          <div class="row">
+            <p class="row-label">3 · Comportamiento</p>
+            <textarea class="field" name="{{ form.prompt_comportamiento.html_name }}" rows="3"
+                      placeholder="{{ form.fields.prompt_comportamiento.widget.attrs.placeholder }}">{{ form.prompt_comportamiento.value|default:'' }}</textarea>
+            <p class="row-hint">Qué debe y no debe hacer. Tono, límites, prioridades</p>
+          </div>
+          <div class="row">
+            <p class="row-label">4 · Formato</p>
+            <textarea class="field" name="{{ form.prompt_formato.html_name }}" rows="3"
+                      placeholder="{{ form.fields.prompt_formato.widget.attrs.placeholder }}">{{ form.prompt_formato.value|default:'' }}</textarea>
+            <p class="row-hint">Largo de respuestas, idioma, uso de markdown, estructura</p>
+          </div>
+          <div class="row">
+            <p class="row-label">5 · Restricciones</p>
+            <textarea class="field" name="{{ form.prompt_restricciones.html_name }}" rows="3"
+                      placeholder="{{ form.fields.prompt_restricciones.widget.attrs.placeholder }}">{{ form.prompt_restricciones.value|default:'' }}</textarea>
+            <p class="row-hint">Lo que nunca debe hacer, temas fuera de scope</p>
+          </div>
         </div>
 
         <div class="card-footer">
@@ -278,6 +342,16 @@
       </div>
     </form>
   </section>
+
+  <script>
+  function togglePromptMode(on) {
+    document.getElementById('prompt-simple').style.display    = on ? 'none'  : 'block';
+    document.getElementById('prompt-structured').style.display = on ? 'block' : 'none';
+    document.getElementById('toggle-track').style.background  = on ? 'var(--accent)' : 'var(--text-3)';
+    document.getElementById('toggle-thumb').style.transform   = on ? 'translateX(18px)' : 'translateX(0)';
+  }
+  togglePromptMode(document.getElementById('{{ form.use_structured_prompt.id_for_label }}').checked);
+  </script>
 
   {# ── Memoria ──────────────────────────────────────────────────────────── #}
   <section>

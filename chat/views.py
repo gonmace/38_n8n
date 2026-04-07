@@ -44,7 +44,22 @@ def _user_info_text(user, profile):
 
 def _build_system_prompt(profile, user):
     """Construye el prompt completo: prompt base + datos personales + hechos del usuario."""
-    base = profile.system_prompt.strip() or DEFAULT_SYSTEM_PROMPT
+    if profile.use_structured_prompt:
+        parts = []
+        if profile.prompt_rol:
+            parts.append(f'ROL:\n{profile.prompt_rol}')
+        if profile.prompt_contexto:
+            parts.append(f'CONTEXTO:\n{profile.prompt_contexto}')
+        if profile.prompt_comportamiento:
+            parts.append(f'COMPORTAMIENTO:\n{profile.prompt_comportamiento}')
+        if profile.prompt_formato:
+            parts.append(f'FORMATO DE RESPUESTA:\n{profile.prompt_formato}')
+        if profile.prompt_restricciones:
+            parts.append(f'RESTRICCIONES:\n{profile.prompt_restricciones}')
+        base = '\n\n'.join(parts) if parts else DEFAULT_SYSTEM_PROMPT
+    else:
+        base = profile.system_prompt.strip() or DEFAULT_SYSTEM_PROMPT
+
     base += f'\n\nDatos del usuario:\n{_user_info_text(user, profile)}'
     facts = list(UserFact.objects.filter(user=user))
     if facts:

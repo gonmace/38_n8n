@@ -14,6 +14,30 @@ class UserProfile(models.Model):
         verbose_name='Prompt del sistema',
         help_text='Describe cómo quieres que se comporte el asistente. Ej: "Eres un pirata divertido".'
     )
+    use_structured_prompt = models.BooleanField(
+        default=False,
+        verbose_name='Usar prompt estructurado',
+    )
+    prompt_rol = models.TextField(
+        blank=True, default='', verbose_name='Rol',
+        help_text='Quién es el asistente: identidad, expertise, personalidad.',
+    )
+    prompt_contexto = models.TextField(
+        blank=True, default='', verbose_name='Contexto',
+        help_text='Para qué existe, en qué plataforma o empresa.',
+    )
+    prompt_comportamiento = models.TextField(
+        blank=True, default='', verbose_name='Comportamiento',
+        help_text='Qué debe y no debe hacer. Tono, límites, prioridades.',
+    )
+    prompt_formato = models.TextField(
+        blank=True, default='', verbose_name='Formato de respuesta',
+        help_text='Largo, idioma, markdown sí/no, estructura de respuestas.',
+    )
+    prompt_restricciones = models.TextField(
+        blank=True, default='', verbose_name='Restricciones',
+        help_text='Lo que nunca debe hacer, temas fuera de scope.',
+    )
     assistant_name = models.CharField(
         max_length=100,
         default='Asistente',
