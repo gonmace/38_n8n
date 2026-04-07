@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from .forms import UserFactForm, UserProfileForm
-from .models import Conversation, UserFact, UserProfile
+from .models import Conversation, PromptProfile, UserFact, UserProfile
 
 logger = logging.getLogger(__name__)
 
@@ -24,48 +24,39 @@ def _get_or_create_profile(user):
     return profile
 
 
-def _user_info_text(user, profile):
-    """Genera el bloque de datos personales del usuario para el prompt."""
+def _build_user_context(user, profile):
+    """Genera el bloque de contexto del usuario: datos básicos + hechos memorizados.
+    Omite campos vacíos y deduplica contra UserFacts existentes."""
+    from datetime import date
+    facts = list(UserFact.objects.filter(user=user))
+    fact_keys = {f.key.lower() for f in facts}
     lines = []
+
     name = user.first_name.strip() if user.first_name else user.username
-    lines.append(f'- Nombre: {name}')
+    if 'nombre' not in fact_keys:
+        lines.append(f'- Nombre: {name}')
+
     sex_map = {'M': 'Masculino', 'F': 'Femenino', 'O': 'Otro'}
-    if profile.sex in sex_map:
+    if profile.sex in sex_map and 'sexo' not in fact_keys:
         lines.append(f'- Sexo: {sex_map[profile.sex]}')
-    if profile.birth_date:
-        from datetime import date
+
+    if profile.birth_date and 'edad' not in fact_keys:
         today = date.today()
         age = today.year - profile.birth_date.year - (
             (today.month, today.day) < (profile.birth_date.month, profile.birth_date.day)
         )
         lines.append(f'- Edad: {age} años')
+
+    for fact in facts:
+        lines.append(f'- {fact.key}: {fact.value}')
+
     return '\n'.join(lines)
 
 
 def _build_system_prompt(profile, user):
-    """Construye el prompt completo: prompt base + datos personales + hechos del usuario."""
-    if profile.use_structured_prompt:
-        parts = []
-        if profile.prompt_rol:
-            parts.append(f'ROL:\n{profile.prompt_rol}')
-        if profile.prompt_contexto:
-            parts.append(f'CONTEXTO:\n{profile.prompt_contexto}')
-        if profile.prompt_comportamiento:
-            parts.append(f'COMPORTAMIENTO:\n{profile.prompt_comportamiento}')
-        if profile.prompt_formato:
-            parts.append(f'FORMATO DE RESPUESTA:\n{profile.prompt_formato}')
-        if profile.prompt_restricciones:
-            parts.append(f'RESTRICCIONES:\n{profile.prompt_restricciones}')
-        base = '\n\n'.join(parts) if parts else DEFAULT_SYSTEM_PROMPT
-    else:
-        base = profile.system_prompt.strip() or DEFAULT_SYSTEM_PROMPT
-
-    base += f'\n\nDatos del usuario:\n{_user_info_text(user, profile)}'
-    facts = list(UserFact.objects.filter(user=user))
-    if facts:
-        facts_text = '\n'.join(f'- {f.key}: {f.value}' for f in facts)
-        base += f'\n\nCosas que recuerdo del usuario:\n{facts_text}'
-    return base
+    """Construye el system prompt: solo las secciones del perfil activo."""
+    active = PromptProfile.objects.filter(user=user, is_active=True).first()
+    return (active.build_prompt_text() if active else '') or DEFAULT_SYSTEM_PROMPT
 
 
 @login_required
@@ -126,8 +117,11 @@ def send_message(request, pk):
             'error': 'El asistente no está configurado. Pregunta al administrador.',
         }, status=503)
 
+    user_context = _build_user_context(request.user, profile)
+    full_message = f'Datos del usuario:\n{user_context}\n\nMensaje:\n{text}'
+
     payload = {
-        'message': text,
+        'message': full_message,
         'session_id': str(conversation.pk),
         'system_prompt': system_prompt,
         'turn_count': conversation.turn_count,
@@ -195,9 +189,26 @@ def send_message(request, pk):
 
 
 @login_required
+@require_http_methods(['POST'])
+def rename_conversation(request, pk):
+    conversation = get_object_or_404(Conversation, pk=pk, user=request.user)
+    try:
+        data = json.loads(request.body)
+        title = data.get('title', '').strip()
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse({'error': 'Datos inválidos'}, status=400)
+    if not title:
+        return JsonResponse({'error': 'El título no puede estar vacío'}, status=400)
+    conversation.title = title[:255]
+    conversation.save(update_fields=['title'])
+    return JsonResponse({'title': conversation.title})
+
+
+@login_required
 def user_settings(request):
     profile = _get_or_create_profile(request.user)
     facts = UserFact.objects.filter(user=request.user)
+    prompt_profiles = PromptProfile.objects.filter(user=request.user)
 
     if request.method == 'POST':
         form = UserProfileForm(request.POST, instance=profile)
@@ -212,7 +223,50 @@ def user_settings(request):
         'form': form,
         'facts': facts,
         'fact_form': UserFactForm(),
+        'prompt_profiles': prompt_profiles,
     })
+
+
+@login_required
+@require_http_methods(['POST'])
+def prompt_profile_save(request, pk=None):
+    """Crea o actualiza un PromptProfile."""
+    if pk:
+        pp = get_object_or_404(PromptProfile, pk=pk, user=request.user)
+    else:
+        pp = PromptProfile(user=request.user)
+
+    pp.name = request.POST.get('name', '').strip() or 'Sin nombre'
+    for sec in ('rol', 'contexto', 'comportamiento', 'formato', 'restricciones', 'excepciones'):
+        setattr(pp, f'{sec}_enabled', f'{sec}_enabled' in request.POST)
+        setattr(pp, f'{sec}_label', request.POST.get(f'{sec}_label', '').strip() or sec.upper())
+        setattr(pp, f'prompt_{sec}', request.POST.get(f'prompt_{sec}', ''))
+    pp.save()
+
+    messages.success(request, f'Prompt "{pp.name}" guardado.')
+    return redirect('chat:settings')
+
+
+@login_required
+@require_http_methods(['POST'])
+def prompt_profile_activate(request, pk):
+    """Activa un PromptProfile y desactiva los demás."""
+    pp = get_object_or_404(PromptProfile, pk=pk, user=request.user)
+    PromptProfile.objects.filter(user=request.user).update(is_active=False)
+    pp.is_active = True
+    pp.save(update_fields=['is_active'])
+    messages.success(request, f'"{pp.name}" activado.')
+    return redirect('chat:settings')
+
+
+@login_required
+@require_http_methods(['POST'])
+def prompt_profile_delete(request, pk):
+    pp = get_object_or_404(PromptProfile, pk=pk, user=request.user)
+    name = pp.name
+    pp.delete()
+    messages.success(request, f'Prompt "{name}" eliminado.')
+    return redirect('chat:settings')
 
 
 @login_required

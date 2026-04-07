@@ -8,6 +8,8 @@ set -e
 WORKFLOWS_DIR="./n8n/workflows"
 CREDENTIALS_DIR="./n8n/credentials"
 
+mkdir -p "$WORKFLOWS_DIR" "$CREDENTIALS_DIR"
+
 if [ ! -d "$WORKFLOWS_DIR" ]; then
     echo "Error: no se encontró $WORKFLOWS_DIR"
     echo "  Ejecuta primero 'make n8n-export' en el entorno origen y haz push."

@@ -2,41 +2,72 @@ from django.conf import settings
 from django.db import models
 
 
+class PromptProfile(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='prompt_profiles'
+    )
+    name = models.CharField(max_length=100, verbose_name='Nombre del perfil')
+    is_active = models.BooleanField(default=False, verbose_name='Activo')
+
+    rol_enabled = models.BooleanField(default=True)
+    rol_label = models.CharField(max_length=50, default='ROL')
+    prompt_rol = models.TextField(blank=True, default='')
+
+    contexto_enabled = models.BooleanField(default=True)
+    contexto_label = models.CharField(max_length=50, default='CONTEXTO')
+    prompt_contexto = models.TextField(blank=True, default='')
+
+    comportamiento_enabled = models.BooleanField(default=True)
+    comportamiento_label = models.CharField(max_length=50, default='OBJETIVO')
+    prompt_comportamiento = models.TextField(blank=True, default='')
+
+    formato_enabled = models.BooleanField(default=True)
+    formato_label = models.CharField(max_length=50, default='ESTILO')
+    prompt_formato = models.TextField(blank=True, default='')
+
+    restricciones_enabled = models.BooleanField(default=True)
+    restricciones_label = models.CharField(max_length=50, default='REGLAS')
+    prompt_restricciones = models.TextField(blank=True, default='')
+
+    excepciones_enabled = models.BooleanField(default=True)
+    excepciones_label = models.CharField(max_length=50, default='EXCEPCIONES')
+    prompt_excepciones = models.TextField(blank=True, default='')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Perfil de prompt'
+        verbose_name_plural = 'Perfiles de prompt'
+
+    def __str__(self):
+        return f'{self.name} ({self.user.username})'
+
+    def build_prompt_text(self):
+        """Construye el texto del prompt a partir de las secciones activas."""
+        SECTIONS = [
+            ('rol_enabled', 'rol_label', 'prompt_rol'),
+            ('contexto_enabled', 'contexto_label', 'prompt_contexto'),
+            ('comportamiento_enabled', 'comportamiento_label', 'prompt_comportamiento'),
+            ('formato_enabled', 'formato_label', 'prompt_formato'),
+            ('restricciones_enabled', 'restricciones_label', 'prompt_restricciones'),
+            ('excepciones_enabled', 'excepciones_label', 'prompt_excepciones'),
+        ]
+        parts = []
+        for enabled_f, label_f, text_f in SECTIONS:
+            if getattr(self, enabled_f) and getattr(self, text_f).strip():
+                label = getattr(self, label_f).strip().upper() or label_f.replace('_label', '').upper()
+                parts.append(f'## {label}\n{getattr(self, text_f).strip()}')
+        return '\n\n'.join(parts)
+
+
 class UserProfile(models.Model):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='profile'
-    )
-    system_prompt = models.TextField(
-        blank=True,
-        default='',
-        verbose_name='Prompt del sistema',
-        help_text='Describe cómo quieres que se comporte el asistente. Ej: "Eres un pirata divertido".'
-    )
-    use_structured_prompt = models.BooleanField(
-        default=False,
-        verbose_name='Usar prompt estructurado',
-    )
-    prompt_rol = models.TextField(
-        blank=True, default='', verbose_name='Rol',
-        help_text='Quién es el asistente: identidad, expertise, personalidad.',
-    )
-    prompt_contexto = models.TextField(
-        blank=True, default='', verbose_name='Contexto',
-        help_text='Para qué existe, en qué plataforma o empresa.',
-    )
-    prompt_comportamiento = models.TextField(
-        blank=True, default='', verbose_name='Comportamiento',
-        help_text='Qué debe y no debe hacer. Tono, límites, prioridades.',
-    )
-    prompt_formato = models.TextField(
-        blank=True, default='', verbose_name='Formato de respuesta',
-        help_text='Largo, idioma, markdown sí/no, estructura de respuestas.',
-    )
-    prompt_restricciones = models.TextField(
-        blank=True, default='', verbose_name='Restricciones',
-        help_text='Lo que nunca debe hacer, temas fuera de scope.',
     )
     assistant_name = models.CharField(
         max_length=100,
@@ -48,7 +79,6 @@ class UserProfile(models.Model):
         default='🤖',
         verbose_name='Emoji del asistente'
     )
-    # Campos opcionales para workflow n8n personalizado por usuario
     SEX_CHOICES = [
         ('M', 'Masculino'),
         ('F', 'Femenino'),

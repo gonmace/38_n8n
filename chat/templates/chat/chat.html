@@ -112,16 +112,41 @@
       padding: 14px 6px 6px;
     }
 
-    .conv-link {
-      display: flex; align-items: center; gap: 8px;
-      padding: 8px 10px; border-radius: 8px;
+    .conv-item {
+      display: flex; align-items: center; gap: 4px;
+      padding: 2px 4px 2px 2px; border-radius: 8px;
+      transition: background var(--transition);
+      position: relative;
+    }
+    .conv-item:hover { background: var(--bg-hover); }
+    .conv-item.active { background: var(--bg-active); }
+    .conv-link-inner {
+      flex: 1; min-width: 0;
+      display: flex; align-items: center;
+      padding: 6px 6px; border-radius: 6px;
       font-size: .875rem; color: var(--text-2);
       text-decoration: none; white-space: nowrap; overflow: hidden;
-      transition: background var(--transition), color var(--transition);
+      transition: color var(--transition);
     }
-    .conv-link:hover { background: var(--bg-hover); color: var(--text-1); }
-    .conv-link.active { background: var(--bg-active); color: var(--text-1); }
-    .conv-link span { overflow: hidden; text-overflow: ellipsis; }
+    .conv-item:hover .conv-link-inner,
+    .conv-item.active .conv-link-inner { color: var(--text-1); }
+    .conv-title { overflow: hidden; text-overflow: ellipsis; }
+    .conv-rename-btn {
+      flex-shrink: 0; opacity: 0;
+      width: 24px; height: 24px; border-radius: 5px;
+      display: flex; align-items: center; justify-content: center;
+      background: transparent; border: none; cursor: pointer;
+      color: var(--text-2); transition: opacity .15s, background .15s;
+    }
+    .conv-item:hover .conv-rename-btn { opacity: 1; }
+    .conv-rename-btn:hover { background: var(--bg-hover); color: var(--text-1); }
+    .conv-rename-input {
+      flex: 1; min-width: 0;
+      background: var(--bg-input); border: 1px solid var(--accent);
+      border-radius: 6px; padding: 4px 8px;
+      font-size: .875rem; color: var(--text-1);
+      font-family: inherit; outline: none;
+    }
 
     /* sb actions */
     .sb-footer { padding: 8px 10px 14px; display: flex; flex-direction: column; gap: 2px; }
@@ -353,10 +378,18 @@
     <p class="sb-section">Conversaciones</p>
     {% endif %}
     {% for conv in conversations %}
-    <a href="{% url 'chat:detail' conv.pk %}"
-       class="conv-link {% if conv.pk == conversation.pk %}active{% endif %}">
-      <span>{{ conv.title }}</span>
-    </a>
+    <div class="conv-item {% if conv.pk == conversation.pk %}active{% endif %}"
+         data-pk="{{ conv.pk }}"
+         data-rename-url="{% url 'chat:rename' conv.pk %}">
+      <a href="{% url 'chat:detail' conv.pk %}" class="conv-link-inner">
+        <span class="conv-title">{{ conv.title }}</span>
+      </a>
+      <button class="conv-rename-btn" title="Renombrar" onclick="startRename(this)">
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z"/>
+        </svg>
+      </button>
+    </div>
     {% empty %}
     <p style="font-size:.8125rem; color:var(--text-3); padding:16px 10px;">Sin conversaciones</p>
     {% endfor %}
@@ -656,6 +689,53 @@ sendBtn.addEventListener('click', send);
 
 scrollEnd();
 input.focus();
+
+/* ── Rename conversation ─────────────────────────────────────────────────── */
+function startRename(btn) {
+  const item  = btn.closest('.conv-item');
+  const inner = item.querySelector('.conv-link-inner');
+  const title = item.querySelector('.conv-title').textContent.trim();
+  const url   = item.dataset.renameUrl;
+
+  // Reemplaza el link por un input
+  const inp = document.createElement('input');
+  inp.className = 'conv-rename-input';
+  inp.value = title;
+  inner.replaceWith(inp);
+  btn.style.display = 'none';
+  inp.focus();
+  inp.select();
+
+  async function save() {
+    const newTitle = inp.value.trim();
+    if (!newTitle || newTitle === title) { location.reload(); return; }
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf},
+        body: JSON.stringify({title: newTitle}),
+      });
+      const data = await res.json();
+      if (data.title) {
+        // Actualiza el DOM sin recargar
+        const a = document.createElement('a');
+        a.href = inner.href || location.pathname;
+        a.className = 'conv-link-inner';
+        a.innerHTML = `<span class="conv-title">${data.title}</span>`;
+        inp.replaceWith(a);
+        btn.style.display = '';
+        // Actualiza el título de la página si es la conversación activa
+        if (item.classList.contains('active')) document.title = data.title;
+      }
+    } catch { location.reload(); }
+  }
+
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter')  { e.preventDefault(); save(); }
+    if (e.key === 'Escape') { location.reload(); }
+  });
+  inp.addEventListener('blur', save);
+}
 </script>
 
 {% if debug %}
